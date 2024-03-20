@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package proto;
+
+service fmi3 {
+
+    rpc instantiateCoSimulation(Empty) returns (Instance) {}
+
+    rpc freeInstance(Instance) returns (Empty) {}
+
+    rpc doStep(Instance) returns (Empty) {}
+
+    rpc getContinuousStates(Instance) returns (Array) {}
+
+    rpc getDerivatives(Instance) returns (Array) {}
+
+    rpc enterInitializationMode(enterInitializationModeRequest) returns (Empty) {}
+
+    rpc exitInitializationMode(Instance) returns (Empty) {}
+
+    rpc getFloat64(getValue64Request) returns (getFloat64Reply) {}
+
+    rpc terminate(Instance) returns (Empty) {}
+
+}
+
+message Empty {}
+
+message Instance {
+    int32 key = 1;
+}
+
+message getValue64Request {
+  int32 key = 1; 
+  repeated int32 valueReferences = 2;  
+}
+
+message getFloat64Reply {
+  repeated double values = 1;  
+}
+
+message enterInitializationModeRequest {
+    int32 key = 1;
+    bool toleranceDefined = 2;
+    double tolerance = 3;
+    double startTime = 4;
+    bool stopTimeDefined = 5;
+    double stopTime = 6;
+}
+
+message doStepRequest {
+    int32 key = 1;
+    double currentCommunicationPoint = 2;
+    double communicationStepSize = 3;
+}
+
+message Array {
+    repeated double values = 1;
+}
