@@ -5,7 +5,7 @@
 		"dockerfile": "Dockerfile"
 	},
 	"mounts": [
-		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind"
+		"source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind"
 	],
 	"extensions": [
 		"ms-vscode.cpptools-extension-pack"
