@@ -5,8 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Include Zenoh-Cpp
 include(FetchContent)
-FetchContent_declare(zenohpico_backend GIT_REPOSITORY "https://github.com/eclipse-zenoh/zenoh-pico" GIT_TAG release-0.10.1-rc)
-FetchContent_MakeAvailable(zenohpico_backend)
+# FetchContent_declare(zenohc_backend GIT_REPOSITORY "https://github.com/eclipse-zenoh/zenoh-c" GIT_TAG release-0.10.1-rc)
+# FetchContent_MakeAvailable(zenohc_backend)
+find_package(zenohc)
 FetchContent_declare(cpp_wrapper GIT_REPOSITORY "https://github.com/eclipse-zenoh/zenoh-cpp" GIT_TAG release-0.10.1-rc)
 FetchContent_MakeAvailable(cpp_wrapper)
 
@@ -20,8 +21,8 @@ protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS src/fmi3.proto)
 
 # Liaison Client
 add_executable(liaison_client src/liaison_client.cpp ${PROTO_SRCS} ${PROTO_HDRS})
-target_link_libraries(liaison_client PRIVATE zenohcxx::zenohpico ${Protobuf_LIBRARIES})
+target_link_libraries(liaison_client PRIVATE zenohcxx::zenohc::lib ${Protobuf_LIBRARIES})
 
 # Liaison Server
 add_executable(liaison_server src/liaison_server.cpp ${PROTO_SRCS} ${PROTO_HDRS})
-target_link_libraries(liaison_server PRIVATE zenohcxx::zenohpico ${Protobuf_LIBRARIES})
+target_link_libraries(liaison_server PRIVATE zenohcxx::zenohc::lib ${Protobuf_LIBRARIES})
