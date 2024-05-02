@@ -1,28 +1,10 @@
 #include <iostream>
 #include "zenoh.hxx"
-using namespace zenoh;
-
-// int main(int argc, char **argv) {
-//    try {
-//       Config config;
-//       // take Session from std::variant
-//       auto session = expect<Session>(open(std::move(config)));
-//       session.put("demo/query", "Simple!");
-//    } catch (ErrorMessage e) {
-//       // Exception comes from ``expect``, the zenoh-cpp itself does not throw any exception
-//       std::cout << "Received an error :" << e.as_string_view() << "\n";
-//    }
-// }
-
-
-
 #include <condition_variable>
-#include <iostream>
 #include <mutex>
+#include "fmi3.pb.h"
 
-
-
-    
+using namespace zenoh;
 
 int _main(int argc, char **argv) {
 
@@ -48,15 +30,12 @@ int _main(int argc, char **argv) {
       done = true;
       done_signal.notify_all();
    };
-
-
-
    
    Config config;
    // take Session from std::variant
    auto session = expect<Session>(open(std::move(config)));
 
-   session.get("demo/query","foo=89&bar=12", {on_reply, on_done}, opts);
+   session.get("rpc/demo/query","foo=89&bar=12", {on_reply, on_done}, opts);
    std::cout << "Should be working\n";
  
    

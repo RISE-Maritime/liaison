@@ -1,0 +1,13 @@
+
+{
+	"name": "liaison",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"mounts": [
+		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind"
+	],
+	"extensions": [
+		"ms-vscode.cpptools-extension-pack"
+	]
+}

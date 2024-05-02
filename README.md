@@ -1,4 +1,4 @@
-# liaison
+# Liaison
 
 ## Build
 
@@ -9,3 +9,5 @@
 ## Using
 1. Start the FMI server by running `python fmi3_server.py`
 2. Run a simulation with FMPy `fmpy simulate BouncingBall.fmu`
+
+
