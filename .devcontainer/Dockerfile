@@ -1,5 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-22.04
 
+USER root
+
 # Set non-interactive installation mode
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -8,12 +10,23 @@ RUN echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" |
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
-    protobuf-compiler \
-    libprotobuf-dev \
+    #protobuf-compiler \
+    #libprotobuf-dev \
     cmake \
     zenoh \
     # Cleanup apt cache to reduce image size
     && rm -rf /var/lib/apt/lists/*
+
+# Download and build Protobuf from source
+ARG PROTOBUF_VERSION=3.20.1
+RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
+    tar -xzf protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
+    cd protobuf-${PROTOBUF_VERSION} && \
+    ./configure CXXFLAGS=-fPIC && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig
+    
 
 # Install Rust and Zenoh-C
 # See: https://github.com/eclipse-zenoh/zenoh-c/issues/317#issuecomment-2052461738
