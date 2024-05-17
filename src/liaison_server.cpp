@@ -34,6 +34,27 @@ void handleQueryB(const zenoh::Query& query) {
 
 }
 
+void handleQueryC(const zenoh::Query& query) {
+    std::cout << "Query: " << query.get_keyexpr().as_string_view() << std::endl;
+    
+    proto::Empty input;
+    auto query_value = query.get_value();
+    input.ParseFromArray(query_value.payload.start, query_value.payload.len);
+    std::cout << "Value: " << input.value() << std::endl;
+
+    proto::Instance output;
+    output.set_key(666);
+    size_t output_size = output.ByteSizeLong();
+    std::vector<uint8_t> buffer(output_size);
+    output.SerializeToArray(buffer.data(), output_size);
+
+
+    zenoh::QueryReplyOptions options;
+    options.set_encoding(zenoh::Encoding(Z_ENCODING_PREFIX_APP_CUSTOM));
+    query.reply(query.get_keyexpr(), buffer);
+
+}
+
 
 int main() {
 
@@ -46,8 +67,12 @@ int main() {
     auto queryable_1 = zenoh::expect<zenoh::Queryable>(z_server.declare_queryable(keyexpr, handleQueryA));
 
     zenoh::KeyExprView keyexpr3("rpc/demo/query2");
-    auto queryable_2 = zenoh::expect<zenoh::Queryable>(z_server.declare_queryable(keyexpr3, handleQueryB));
+    auto queryable_3 = zenoh::expect<zenoh::Queryable>(z_server.declare_queryable(keyexpr3, handleQueryB));
     
+
+    zenoh::KeyExprView keyexpr2("rpc/demo/fmi3InstantiateCoSimulation");
+    auto queryable_2 = zenoh::expect<zenoh::Queryable>(z_server.declare_queryable(keyexpr2, handleQueryC));
+
     printf("Enter 'q' to quit...\n");
     int c = 0;
     while (c != 'q') {

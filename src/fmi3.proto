@@ -24,7 +24,9 @@ service fmi3 {
 
 }
 
-message Empty {}
+message Empty {
+    double value = 1;
+}
 
 message Instance {
     int32 key = 1;
