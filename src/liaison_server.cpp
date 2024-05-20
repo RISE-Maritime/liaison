@@ -21,7 +21,7 @@ void handleQueryA(const zenoh::Query& query) {
 void handleQueryB(const zenoh::Query& query) {
     std::cout << "Query B" << std::endl;
     proto::Instance instance;
-    instance.set_key(133);
+    instance.set_identifier(133);
 
     size_t instance_size = instance.ByteSizeLong();
     std::vector<uint8_t> buffer(instance_size);
@@ -43,7 +43,7 @@ void handleQueryC(const zenoh::Query& query) {
     std::cout << "Value: " << input.value() << std::endl;
 
     proto::Instance output;
-    output.set_key(666);
+    output.set_identifier(666);
     size_t output_size = output.ByteSizeLong();
     std::vector<uint8_t> buffer(output_size);
     output.SerializeToArray(buffer.data(), output_size);
