@@ -2,35 +2,62 @@ syntax = "proto3";
 
 package proto;
 
-service fmi3 {
-
-    rpc instantiateCoSimulation(Empty) returns (Instance) {}
-
-    rpc freeInstance(Instance) returns (Empty) {}
-
-    rpc doStep(Instance) returns (Empty) {}
-
-    rpc getContinuousStates(Instance) returns (Array) {}
-
-    rpc getDerivatives(Instance) returns (Array) {}
-
-    rpc enterInitializationMode(enterInitializationModeRequest) returns (Empty) {}
-
-    rpc exitInitializationMode(Instance) returns (Empty) {}
-
-    rpc getFloat64(getValue64Request) returns (getFloat64Reply) {}
-
-    rpc terminate(Instance) returns (Empty) {}
-
+message Instance {
+    int32 identifier = 1;
 }
+
+message fmi3InstantiateCoSimulationInput{
+    string instance_name = 1;
+    string instantiation_token = 2;
+    string resource_path = 3;
+    bool visible = 4;
+    bool logging_on = 5;
+    bool event_mode_used = 6;
+    bool early_return_allowed = 7;
+    repeated int32 required_intermediate_variables = 8;
+    int32 n_required_intermediate_variables = 9;
+}
+
+message fmi3EnterInitializationModeInput {
+    int32 instance = 1;
+    bool tolerance_defined = 2;
+    double tolerance = 3;
+    double start_time = 4;
+    bool stop_time_defined = 5;
+    double stop_time = 6;
+}
+
+
+message fmi3DoStepInput {
+    int32 instance = 1;
+    double current_communication_point = 2;
+    double communication_step_size = 3;
+    bool no_set_fmu_state_prior_to_current_point = 4;
+    bool event_handling_needed = 5;
+    bool terminate_simulation = 6;
+    bool early_return = 7;
+    double last_successful_time = 8;
+}
+
+
 
 message Empty {
     double value = 1;
 }
 
-message Instance {
-    int32 key = 1;
+enum StatusEnum {
+    OK = 0;
+    WARNING = 1;
+    DISCARD = 2;
+    ERROR = 3;
+    FATAL = 4;
 }
+
+message Status {
+    StatusEnum value = 1;
+}
+
+
 
 message getValue64Request {
   int32 key = 1; 
@@ -41,20 +68,6 @@ message getFloat64Reply {
   repeated double values = 1;  
 }
 
-message enterInitializationModeRequest {
-    int32 key = 1;
-    bool toleranceDefined = 2;
-    double tolerance = 3;
-    double startTime = 4;
-    bool stopTimeDefined = 5;
-    double stopTime = 6;
-}
-
-message doStepRequest {
-    int32 key = 1;
-    double currentCommunicationPoint = 2;
-    double communicationStepSize = 3;
-}
 
 message Array {
     repeated double values = 1;

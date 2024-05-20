@@ -39,10 +39,3 @@ target_link_libraries(liaison_server PRIVATE zenohcxx::zenohc::lib ${Zenohc_STAT
 # Liaison FMU
 add_library(liaison SHARED src/fmi3Functions.cpp)
 target_link_libraries(liaison PRIVATE zenohcxx::zenohc::lib ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB} )
-# target_link_libraries(liaison
-#     fmi3_grpc_proto
-#     absl::flags
-#     absl::flags_parse
-#     ${_REFLECTION}
-#     ${_GRPC_GRPCPP}
-#     ${_PROTOBUF_LIBPROTOBUF})

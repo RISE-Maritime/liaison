@@ -12,6 +12,10 @@
         return ERROR_RETURN;                                       \
     } \
 
+#define GET_IDENTIFIER() \
+    FmuInstance* fmuInstance = reinterpret_cast<FmuInstance*>(instance); \
+    int identifier = fmuInstance->identifier;  \
+
 std::string responder_id = "demo";
 
 // ZENOH 
@@ -75,11 +79,27 @@ void startZenoh(){
 class FmuInstance {
 public:
     FmuInstance(int k) {
-        key = k;
+        identifier = k;
     }
-    int key;
+    int identifier;
 };
 
+// Function to convert from proto::Status message to fmi3Status enum
+fmi3Status StatusToFmi3Status(proto::Status status) {
+    switch (status.value()) {
+        case proto::OK: return fmi3OK;
+        case proto::WARNING: return fmi3Warning;
+        case proto::DISCARD: return fmi3Discard;
+        case proto::ERROR: return fmi3Error;
+        case proto::FATAL: return fmi3Fatal;
+        default: throw std::invalid_argument("Invalid FMI3Status value");
+    }
+}
+
+int GetIdentifier(fmi3Instance instance) {
+    FmuInstance* fmuInstance = reinterpret_cast<FmuInstance*>(instance);
+    return fmuInstance->identifier;
+}
 
 extern "C" {
 
@@ -101,14 +121,156 @@ fmi3Instance fmi3InstantiateCoSimulation(
     fmi3InstanceEnvironment        instanceEnvironment,
     fmi3LogMessageCallback         logMessage,
     fmi3IntermediateUpdateCallback intermediateUpdate) {
+    // TODO: implement the usage of fmi3InstanceEnvironment, fmi3LogMessageCallback
+    // and fmi3IntermediateUpdateCallback.
     
-    
+
     startZenoh();
-    proto::Empty input;
+    
+    proto::fmi3InstantiateCoSimulationInput input;
+    input.set_instance_name(instanceName);
+    input.set_instantiation_token(instantiationToken);
+    input.set_resource_path(resourcePath);
+    input.set_visible(visible);
+    input.set_logging_on(loggingOn);
+    input.set_event_mode_used(eventModeUsed);
+    input.set_early_return_allowed(earlyReturnAllowed);
+    for (int i = 0; i < nRequiredIntermediateVariables; ++i) {
+        input.add_required_intermediate_variables(requiredIntermediateVariables[i]); 
+    }
+    input.set_n_required_intermediate_variables(nRequiredIntermediateVariables);
     proto::Instance output;
     ZENOH_FMI3_QUERY("fmi3InstantiateCoSimulation")
-    FmuInstance* fmu_instance = new FmuInstance(output.key());
-    return reinterpret_cast<fmi3Instance>(fmu_instance);
+
+    FmuInstance* fmuInstance = new FmuInstance(output.identifier());
+    return reinterpret_cast<fmi3Instance>(fmuInstance);
 }
 
+
+fmi3Status fmi3EnterInitializationMode(
+    fmi3Instance instance,
+    fmi3Boolean toleranceDefined,
+    fmi3Float64 tolerance,
+    fmi3Float64 startTime,
+    fmi3Boolean stopTimeDefined,
+    fmi3Float64 stopTime) {
+
+    proto::fmi3EnterInitializationModeInput input;
+    input.set_instance(GetIdentifier(instance));
+    input.set_tolerance_defined(toleranceDefined);
+    input.set_tolerance(tolerance);
+    input.set_start_time(startTime);
+    input.set_stop_time_defined(stopTimeDefined);
+    input.set_stop_time(stopTime);
+    proto::Status output;
+    ZENOH_FMI3_QUERY("fmi3EnterInitializationMode")
+    return StatusToFmi3Status(output);
 }
+
+fmi3Status fmi3DoStep(fmi3Instance instance,
+    fmi3Float64 currentCommunicationPoint,
+    fmi3Float64 communicationStepSize,
+    fmi3Boolean noSetFMUStatePriorToCurrentPoint,
+    fmi3Boolean* eventHandlingNeeded,
+    fmi3Boolean* terminateSimulation,
+    fmi3Boolean* earlyReturn,
+    fmi3Float64* lastSuccessfulTime) {
+
+    proto::fmi3DoStepInput input;
+    input.set_instance(GetIdentifier(instance));  
+    input.set_current_communication_point(currentCommunicationPoint);
+    input.set_communication_step_size(communicationStepSize);
+    input.set_no_set_fmu_state_prior_to_current_point(noSetFMUStatePriorToCurrentPoint);
+    input.set_event_handling_needed(*eventHandlingNeeded);
+    input.set_terminate_simulation(*terminateSimulation);
+    input.set_early_return(*earlyReturn);
+    input.set_last_successful_time(*lastSuccessfulTime);
+    proto::Status output;
+    ZENOH_FMI3_QUERY("fmi3DoStep")
+    return StatusToFmi3Status(output);
+}
+
+// fmi3Status fmi3GetFloat64(
+//     fmi3Instance instance,
+//     const fmi3ValueReference valueReferences[],
+//     size_t nValueReferences,
+//     fmi3Float64 values[],
+//     size_t nValues) {
+    
+//     proto::getValue64Request request;
+//     FmuInstance* fmu_instance = reinterpret_cast<FmuInstance*>(instance);
+//     request.set_key(fmu_instance->key);  
+
+//     for (size_t i = 0; i < nValueReferences; ++i) {
+//         request.add_valuereferences(valueReferences[i]);  
+//     }
+
+//     proto::getFloat64Reply reply;
+//     grpc::ClientContext context;
+//     grpc::Status status = client->getFloat64(&context, request, &reply);
+//     if (!status.ok()) {
+//         std::cerr << status.error_message() << std::endl;
+//         return fmi3Error;
+//     }
+
+//     for (int i = 0; i < reply.values_size(); ++i) {
+//         values[i] = reply.values(i);
+//     }
+
+//     return fmi3OK;
+// }
+
+
+
+
+// fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
+//     proto::Instance request;
+//     proto::Empty reply;
+//     grpc::ClientContext context;
+//     grpc::Status status = client->exitInitializationMode(&context, request, &reply);
+//     if (!status.ok()) {
+//         std::cerr << status.error_message() << std::endl;
+//         return fmi3Error;
+//     }
+//     return fmi3OK;
+// }
+
+
+// void fmi3FreeInstance(fmi3Instance instance) {
+//     FmuInstance* fmu_instance = reinterpret_cast<FmuInstance*>(instance);
+//     proto::Instance request;
+//     request.set_key(fmu_instance->key);
+//     proto::Empty reply;
+//     grpc::ClientContext context;
+//     grpc::Status status = client->freeInstance(&context, request, &reply);
+//     if (!status.ok()) {
+//         std::cerr << status.error_message() << std::endl;
+//     } 
+//     delete fmu_instance;
+// }
+
+// fmi3Status fmi3Terminate(fmi3Instance instance) {
+//     proto::Instance request;
+//     proto::Empty reply;
+//     grpc::ClientContext context;
+//     grpc::Status status = client->terminate(&context, request, &reply);
+//     if (!status.ok()) {
+//         std::cerr << status.error_message() << std::endl;
+//         return fmi3Error;
+//     }
+
+//     return fmi3OK;
+// }
+
+// fmi3Status fmi3SetDebugLogging(
+//     fmi3Instance instance,
+//     fmi3Boolean loggingOn,
+//     size_t nCategories,
+//     const fmi3String categories[]) {
+    
+//     // Missing body
+//     return fmi3OK;
+// }
+
+}
+
