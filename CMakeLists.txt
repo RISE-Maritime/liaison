@@ -19,6 +19,13 @@ FetchContent_MakeAvailable(zenohcpp)
 find_package(Protobuf REQUIRED)
 message(STATUS "Using protobuf ${Protobuf_VERSION}")
 
+
+# Incluce libzip
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBZIP REQUIRED libzip)
+include_directories(${LIBZIP_INCLUDE_DIRS})
+link_directories(${LIBZIP_LIBRARY_DIRS})
+
 # Generate protobuf files
 include_directories(${PROTOBUF_INCLUDE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -39,3 +46,13 @@ target_link_libraries(liaison_server PRIVATE zenohcxx::zenohc::lib ${Zenohc_STAT
 # Liaison FMU
 add_library(liaison SHARED src/fmi3Functions.cpp)
 target_link_libraries(liaison PRIVATE zenohcxx::zenohc::lib ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB} )
+
+
+# fmi3Server 
+add_executable(fmi3Server src/fmi3Server.cpp ${PROTO_SRCS} ${PROTO_HDRS})
+target_link_libraries(fmi3Server PRIVATE
+    zenohcxx::zenohc::lib 
+    ${Zenohc_STATIC_LIB} 
+    ${Protobuf_STATIC_LIB}
+    ${LIBZIP_LIBRARIES}
+)

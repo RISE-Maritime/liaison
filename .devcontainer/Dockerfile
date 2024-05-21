@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     #libprotobuf-dev \
     cmake \
     zenoh \
+    libzip-dev \
     # Cleanup apt cache to reduce image size
     && rm -rf /var/lib/apt/lists/*
 

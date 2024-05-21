@@ -20,8 +20,8 @@ void handleQueryA(const zenoh::Query& query) {
 
 void handleQueryB(const zenoh::Query& query) {
     std::cout << "Query B" << std::endl;
-    proto::Instance instance;
-    instance.set_identifier(133);
+    proto::fmi3InstanceMessage instance;
+    instance.set_instance(133);
 
     size_t instance_size = instance.ByteSizeLong();
     std::vector<uint8_t> buffer(instance_size);
@@ -42,8 +42,8 @@ void handleQueryC(const zenoh::Query& query) {
     input.ParseFromArray(query_value.payload.start, query_value.payload.len);
     std::cout << "Value: " << input.value() << std::endl;
 
-    proto::Instance output;
-    output.set_identifier(666);
+    proto::fmi3InstanceMessage output;
+    output.set_instance(666);
     size_t output_size = output.ByteSizeLong();
     std::vector<uint8_t> buffer(output_size);
     output.SerializeToArray(buffer.data(), output_size);

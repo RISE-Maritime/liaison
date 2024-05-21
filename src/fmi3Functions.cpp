@@ -12,29 +12,15 @@
         return ERROR_RETURN;                                       \
     } \
 
-#define GET_IDENTIFIER() \
-    FmuInstance* fmuInstance = reinterpret_cast<FmuInstance*>(instance); \
-    int identifier = fmuInstance->identifier;  \
+#define SET_INSTANCE(INPUT, INSTANCE) \
+    Placeholder* placeholder = reinterpret_cast<Placeholder*>(INSTANCE); \
+    INPUT.set_instance(placeholder->instance);  \
 
 std::string responder_id = "demo";
 
 // ZENOH 
 
 std::unique_ptr<zenoh::Session> z_client;
-
-void startZenoh(){
-    zenoh::Config config;
-    auto result = open(std::move(config));
-    if (std::holds_alternative<zenoh::Session>(result)) {
-        z_client = std::make_unique<zenoh::Session>(std::move(std::get<zenoh::Session>(result)));
-        std::cout << "Zenoh Session started successfully." << std::endl;
-    } else if (auto error = std::get_if<zenoh::ErrorMessage>(&result)) {
-         throw std::runtime_error(std::string(error->as_string_view()));
-    } else {
-        std::cerr << "Error: Unknown." << std::endl;
-    }
-}
-
 
 // This macro makes a remote procedure call in the form of a query
 // to Zenoh queryable. The argument fmi3Function is the name of the
@@ -46,10 +32,10 @@ void startZenoh(){
 //      and defined following the key expression specification of 
 //      Zenoh (e.g. std::string responder_id = "foo/bar").
 //  1.  A variable 'input' of a certain Protobuf message type
-//      is declared and defined (e.g. proto::Instance input; 
+//      is declared and defined (e.g. proto::fmi3InstanceMessage input; 
 //      input.set_key(1);)
 //  2. A variable 'output' of a certain Protobuf messate type 
-//     is declared (e.g. proto::Instance output;).
+//     is declared (e.g. proto::fmi3InstanceMessage output;).
 #define ZENOH_FMI3_QUERY(fmi3Function) \
     size_t input_size = input.ByteSizeLong(); \
     std::vector<uint8_t> buffer(input_size); \
@@ -76,17 +62,16 @@ void startZenoh(){
     
 // end of ZENOH
 
-class FmuInstance {
+class Placeholder {
 public:
-    FmuInstance(int k) {
-        identifier = k;
+    Placeholder(int id) {
+        instance = id;
     }
-    int identifier;
+    int instance;
 };
 
-// Function to convert from proto::Status message to fmi3Status enum
-fmi3Status StatusToFmi3Status(proto::Status status) {
-    switch (status.value()) {
+fmi3Status extractFmi3Status(proto::fmi3StatusMessage status_message) {
+    switch (status_message.status()) {
         case proto::OK: return fmi3OK;
         case proto::WARNING: return fmi3Warning;
         case proto::DISCARD: return fmi3Discard;
@@ -94,11 +79,6 @@ fmi3Status StatusToFmi3Status(proto::Status status) {
         case proto::FATAL: return fmi3Fatal;
         default: throw std::invalid_argument("Invalid FMI3Status value");
     }
-}
-
-int GetIdentifier(fmi3Instance instance) {
-    FmuInstance* fmuInstance = reinterpret_cast<FmuInstance*>(instance);
-    return fmuInstance->identifier;
 }
 
 extern "C" {
@@ -124,10 +104,21 @@ fmi3Instance fmi3InstantiateCoSimulation(
     // TODO: implement the usage of fmi3InstanceEnvironment, fmi3LogMessageCallback
     // and fmi3IntermediateUpdateCallback.
     
-
-    startZenoh();
+    // Start Zenoh Session
+    zenoh::Config config;
+    auto result = open(std::move(config));
+    if (std::holds_alternative<zenoh::Session>(result)) {
+        z_client = std::make_unique<zenoh::Session>(std::move(std::get<zenoh::Session>(result)));
+        std::cout << "Zenoh Session started successfully." << std::endl;
+    } else if (auto error = std::get_if<zenoh::ErrorMessage>(&result)) {
+         throw std::runtime_error(std::string(error->as_string_view()));
+    } else {
+        std::cerr << "Error: Unknown." << std::endl;
+    }
     
-    proto::fmi3InstantiateCoSimulationInput input;
+    proto::fmi3InstantiateCoSimulationMessage input;
+    proto::fmi3InstanceMessage output;
+
     input.set_instance_name(instanceName);
     input.set_instantiation_token(instantiationToken);
     input.set_resource_path(resourcePath);
@@ -139,11 +130,11 @@ fmi3Instance fmi3InstantiateCoSimulation(
         input.add_required_intermediate_variables(requiredIntermediateVariables[i]); 
     }
     input.set_n_required_intermediate_variables(nRequiredIntermediateVariables);
-    proto::Instance output;
+    
     ZENOH_FMI3_QUERY("fmi3InstantiateCoSimulation")
 
-    FmuInstance* fmuInstance = new FmuInstance(output.identifier());
-    return reinterpret_cast<fmi3Instance>(fmuInstance);
+    Placeholder* placeholder = new Placeholder(output.instance());
+    return reinterpret_cast<fmi3Instance>(placeholder);
 }
 
 
@@ -155,16 +146,19 @@ fmi3Status fmi3EnterInitializationMode(
     fmi3Boolean stopTimeDefined,
     fmi3Float64 stopTime) {
 
-    proto::fmi3EnterInitializationModeInput input;
-    input.set_instance(GetIdentifier(instance));
+    proto::fmi3EnterInitializationModeMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
     input.set_tolerance_defined(toleranceDefined);
     input.set_tolerance(tolerance);
     input.set_start_time(startTime);
     input.set_stop_time_defined(stopTimeDefined);
     input.set_stop_time(stopTime);
-    proto::Status output;
+    
     ZENOH_FMI3_QUERY("fmi3EnterInitializationMode")
-    return StatusToFmi3Status(output);
+
+    return extractFmi3Status(output);
 }
 
 fmi3Status fmi3DoStep(fmi3Instance instance,
@@ -176,8 +170,10 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     fmi3Boolean* earlyReturn,
     fmi3Float64* lastSuccessfulTime) {
 
-    proto::fmi3DoStepInput input;
-    input.set_instance(GetIdentifier(instance));  
+    proto::fmi3DoStepMessage input;
+    proto::fmi3StatusMessage output;
+    
+    SET_INSTANCE(input, instance) 
     input.set_current_communication_point(currentCommunicationPoint);
     input.set_communication_step_size(communicationStepSize);
     input.set_no_set_fmu_state_prior_to_current_point(noSetFMUStatePriorToCurrentPoint);
@@ -185,92 +181,94 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     input.set_terminate_simulation(*terminateSimulation);
     input.set_early_return(*earlyReturn);
     input.set_last_successful_time(*lastSuccessfulTime);
-    proto::Status output;
+
     ZENOH_FMI3_QUERY("fmi3DoStep")
-    return StatusToFmi3Status(output);
+    
+    return extractFmi3Status(output);
 }
 
-// fmi3Status fmi3GetFloat64(
-//     fmi3Instance instance,
-//     const fmi3ValueReference valueReferences[],
-//     size_t nValueReferences,
-//     fmi3Float64 values[],
-//     size_t nValues) {
+fmi3Status fmi3GetFloat64(
+    fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    fmi3Float64 values[],
+    size_t nValues) {
     
-//     proto::getValue64Request request;
-//     FmuInstance* fmu_instance = reinterpret_cast<FmuInstance*>(instance);
-//     request.set_key(fmu_instance->key);  
+    proto::fmi3GetFloat64Message input;
+    proto::fmi3StatusMessage output;
 
-//     for (size_t i = 0; i < nValueReferences; ++i) {
-//         request.add_valuereferences(valueReferences[i]);  
-//     }
-
-//     proto::getFloat64Reply reply;
-//     grpc::ClientContext context;
-//     grpc::Status status = client->getFloat64(&context, request, &reply);
-//     if (!status.ok()) {
-//         std::cerr << status.error_message() << std::endl;
-//         return fmi3Error;
-//     }
-
-//     for (int i = 0; i < reply.values_size(); ++i) {
-//         values[i] = reply.values(i);
-//     }
-
-//     return fmi3OK;
-// }
-
-
-
-
-// fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
-//     proto::Instance request;
-//     proto::Empty reply;
-//     grpc::ClientContext context;
-//     grpc::Status status = client->exitInitializationMode(&context, request, &reply);
-//     if (!status.ok()) {
-//         std::cerr << status.error_message() << std::endl;
-//         return fmi3Error;
-//     }
-//     return fmi3OK;
-// }
-
-
-// void fmi3FreeInstance(fmi3Instance instance) {
-//     FmuInstance* fmu_instance = reinterpret_cast<FmuInstance*>(instance);
-//     proto::Instance request;
-//     request.set_key(fmu_instance->key);
-//     proto::Empty reply;
-//     grpc::ClientContext context;
-//     grpc::Status status = client->freeInstance(&context, request, &reply);
-//     if (!status.ok()) {
-//         std::cerr << status.error_message() << std::endl;
-//     } 
-//     delete fmu_instance;
-// }
-
-// fmi3Status fmi3Terminate(fmi3Instance instance) {
-//     proto::Instance request;
-//     proto::Empty reply;
-//     grpc::ClientContext context;
-//     grpc::Status status = client->terminate(&context, request, &reply);
-//     if (!status.ok()) {
-//         std::cerr << status.error_message() << std::endl;
-//         return fmi3Error;
-//     }
-
-//     return fmi3OK;
-// }
-
-// fmi3Status fmi3SetDebugLogging(
-//     fmi3Instance instance,
-//     fmi3Boolean loggingOn,
-//     size_t nCategories,
-//     const fmi3String categories[]) {
+    SET_INSTANCE(input, instance) 
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]); 
+    }
+    input.set_n_value_references(nValueReferences);
+    for (int i = 0; i < nValues; ++i) {
+        input.add_values(values[i]); 
+    }
+    input.set_n_values(nValues);
     
-//     // Missing body
-//     return fmi3OK;
-// }
+    ZENOH_FMI3_QUERY("fmi3GetFloat64")
+    
+    return extractFmi3Status(output);
+}
+
+
+fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
+    
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
+    
+    SET_INSTANCE(input, instance)
+
+    ZENOH_FMI3_QUERY("fmi3ExitInitializationMode")
+
+    return extractFmi3Status(output);
+}
+
+
+void fmi3FreeInstance(fmi3Instance instance) {
+
+    proto::fmi3InstanceMessage input;
+    proto::voidMessage output;
+
+    SET_INSTANCE(input, instance)
+
+    ZENOH_FMI3_QUERY("fmi3FreeInstance")
+
+    delete placeholder;
+}
+
+fmi3Status fmi3Terminate(fmi3Instance instance) {
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+    
+    ZENOH_FMI3_QUERY("fmi3Terminate")
+
+    return extractFmi3Status(output);;
+}
+
+fmi3Status fmi3SetDebugLogging(
+    fmi3Instance instance,
+    fmi3Boolean loggingOn,
+    size_t nCategories,
+    const fmi3String categories[]) {
+
+    proto::fmi3SetDebugLoggingMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+    input.set_logging_on(loggingOn);
+    input.set_n_categories(nCategories);
+    for (int i = 0; i < nCategories; ++i) {
+        input.add_categories(categories[i]); 
+    }
+    
+    ZENOH_FMI3_QUERY("fmi3SetDebugLogging")
+
+    return extractFmi3Status(output);
+}
 
 }
 
