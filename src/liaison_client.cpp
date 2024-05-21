@@ -62,10 +62,10 @@ int main(int argc, char **argv) {
     
     proto::Empty input;
     input.set_value(333);
-    proto::Instance output;
+    proto::fmi3InstanceMessage output;
     ZENOH_FMI3_QUERY("fmi3InstantiateCoSimulation")
 
-    std::cout << "Instance number: " << output.identifier() << std::endl; 
+    std::cout << "Instance number: " << output.instance() << std::endl; 
    
     z_client.reset();
 
