@@ -1,11 +1,32 @@
-# liaison
+# Liaision (in development)
 
-## Build
+Liaison provides remote access to an FMU through a client FMU and a server application.
 
-1. Build the dynamic libraries with CMake.
-2. Make the Liaision FMU by running: `python make_liaison_fmu.py BouncingBall .\build\Debug\liaison.dll .\modelDescription.xml .\`
-3. Generate the necessary files for the python server by running `python -m grpc_tools.protoc --proto_path=./ --python_out=. --pyi_out=. --grpc_python_out=. ./fmi3.proto`
+By doing so, Liasion enables co-simulations across organisations without sharing intellectual property, as the FMUs never leave the organisation. 
 
-## Using
-1. Start the FMI server by running `python fmi3_server.py`
-2. Run a simulation with FMPy `fmpy simulate BouncingBall.fmu`
+## Usage
+
+Build all the targets and `cd` to the `build` folder.
+
+### Step 1: Create a "Liaision FMU"
+
+``./liaison --make-fmu ../tests/BouncingBall.fmu fmus/bouncingball``
+
+### Step 2: Run the "Liaison Server"
+
+``./liaison --server ../tests/BouncingBall.fmu fmus/bouncingball``
+
+### Step 3: Simulat the "Liaison FMU"
+
+``fmpy simulate BouncingBallLiaison.fmu --show-plot``
+
+
+## Development
+
+This repository contains the necessary files for developing Liaision smoothly in VSCode. To do so, you must have the VSCode extension "DevContainers". 
+
+1. Clone the repository. 
+2. Open it in VSCode.
+3. Reopen the repository in a DevContainer. 
+4. Build the targets.
+

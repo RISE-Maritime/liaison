@@ -1,78 +1,53 @@
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
+project(Liaison)
 
-cmake_minimum_required(VERSION 3.11)
+set(CMAKE_CXX_STANDARD 17)
 
-project(Liaison VERSION 0.1.0)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-if(MSVC)
-  add_definitions(-D_WIN32_WINNT=0x600)
-endif()
+# Statically link dependencies
+set(Zenohc_STATIC_LIB "/usr/local/lib/libzenohc.a")
+set(Protobuf_STATIC_LIB "/usr/local/lib/libprotobuf.a")
 
-# Dependencies
-
+# Include Zenoh-Cpp
 include(FetchContent)
+find_package(zenohc) # Zenoh-c, as well as rust, is installed in the devcontainer 
+FetchContent_declare(zenohcpp GIT_REPOSITORY "https://github.com/eclipse-zenoh/zenoh-cpp" GIT_TAG release-0.10.1-rc)
+FetchContent_MakeAvailable(zenohcpp)
 
-FetchContent_Declare(
-  gRPC
-  GIT_REPOSITORY https://github.com/grpc/grpc
-  GIT_TAG        v1.28.0
-  )
-set(FETCHCONTENT_QUIET OFF)
-FetchContent_MakeAvailable(gRPC)
+# Include Protobuf
+find_package(Protobuf REQUIRED)
+include_directories(${PROTOBUF_INCLUDE_DIR})
 
-set(_PROTOBUF_LIBPROTOBUF libprotobuf)
-set(_REFLECTION grpc++_reflection)
-set(_PROTOBUF_PROTOC $<TARGET_FILE:protoc>)
-set(_GRPC_GRPCPP grpc++)
-if(CMAKE_CROSSCOMPILING)
-  find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-else()
-  set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:grpc_cpp_plugin>)
-endif()
+# Incluce libzip
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBZIP REQUIRED libzip)
+include_directories(${LIBZIP_INCLUDE_DIRS})
+link_directories(${LIBZIP_LIBRARY_DIRS})
 
-
-# Proto file
-get_filename_component(fmi3_proto "./fmi3.proto" ABSOLUTE)
-get_filename_component(fmi3_proto_path "${fmi3_proto}" PATH)
-
-# Generated sources
-set(fmi3_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/fmi3.pb.cc")
-set(fmi3_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/fmi3.pb.h")
-set(fmi3_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/fmi3.grpc.pb.cc")
-set(fmi3_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/fmi3.grpc.pb.h")
-add_custom_command(
-      OUTPUT "${fmi3_proto_srcs}" "${fmi3_proto_hdrs}" "${fmi3_grpc_srcs}" "${fmi3_grpc_hdrs}"
-      COMMAND ${_PROTOBUF_PROTOC}
-      ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}"
-        --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
-        -I "${fmi3_proto_path}"
-        --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
-        "${fmi3_proto}"
-      DEPENDS "${fmi3_proto}")
-
-include_directories("${CMAKE_CURRENT_BINARY_DIR}")
-
+# Include directories with header files
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/fmi3")
 
-## Targets
+# Generate protobuf files
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS src/fmi3.proto)
 
-# fmi3_grpc_proto
-add_library(fmi3_grpc_proto
-  ${fmi3_grpc_srcs}
-  ${fmi3_grpc_hdrs}
-  ${fmi3_proto_srcs}
-  ${fmi3_proto_hdrs})
-target_link_libraries(fmi3_grpc_proto
-  ${_REFLECTION}
-  ${_GRPC_GRPCPP}
-  ${_PROTOBUF_LIBPROTOBUF})
+# Liaison Lib
+set(LIAISON_OUTPUT_DIR ${CMAKE_BINARY_DIR}/binaries/x86_64-linux)
+file(MAKE_DIRECTORY ${LIAISON_OUTPUT_DIR})
+add_library(liaisonfmu SHARED src/fmi3Functions.cpp ${PROTO_SRCS} ${PROTO_HDRS})
+set_target_properties(liaisonfmu PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
+    LIBRARY_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
+    ARCHIVE_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
+)
+target_link_libraries(liaisonfmu PRIVATE zenohcxx::zenohc::lib ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB})
 
-# liaison
-add_library(liaison SHARED src/fmi3Functions.cpp)
-target_link_libraries(liaison
-    fmi3_grpc_proto
-    absl::flags
-    absl::flags_parse
-    ${_REFLECTION}
-    ${_GRPC_GRPCPP}
-    ${_PROTOBUF_LIBPROTOBUF})
-
+# Liaison 
+add_executable(liaison src/liaison.cpp src/utils.cpp ${PROTO_SRCS} ${PROTO_HDRS})
+target_link_libraries(liaison PRIVATE
+    zenohcxx::zenohc::lib 
+    ${Zenohc_STATIC_LIB} 
+    ${Protobuf_STATIC_LIB}
+    ${LIBZIP_LIBRARIES}
+)
