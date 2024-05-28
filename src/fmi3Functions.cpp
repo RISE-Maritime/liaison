@@ -1,9 +1,14 @@
-#include "fmi3Functions.h"
 #include <stdexcept>
-#include <grpcpp/grpcpp.h>
-#include "fmi3.grpc.pb.h"
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <regex>
+#include <dlfcn.h>
+#include <filesystem>
+#include "zenoh.hxx"
+#include "zenohc.hxx"
+#include "fmi3.pb.h"
 #include "fmi3Functions.h"
-
 
 #define TRY_CODE(FUNCTION_CALL, ERROR_MSG, ERROR_RETURN) \
     try {                                                          \
@@ -11,24 +16,123 @@
     } catch (const std::exception &e) {                            \
         std::cerr << ERROR_MSG << e.what() << std::endl;           \
         return ERROR_RETURN;                                       \
-    }
+    } \
 
-// gRPC client
-std::unique_ptr<proto::fmi3::Stub> client;
+#define SET_INSTANCE(INPUT, INSTANCE) \
+    Placeholder* placeholder = reinterpret_cast<Placeholder*>(INSTANCE); \
+    INPUT.set_instance_index(placeholder->instance_index);  \
 
-class FmuInstance {
+
+// ZENOH 
+
+std::unique_ptr<zenoh::Session> z_client;
+
+#define QUERY(fmi3Function, input, output, responderId) \
+    size_t input_size = input.ByteSizeLong(); \
+    std::vector<uint8_t> buffer(input_size); \
+    input.SerializeToArray(buffer.data(), input_size); \
+    std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
+    auto [send, recv] = zenohc::reply_fifo_new(1);   \
+    const char* params = ""; \
+    zenoh::GetOptions options; \
+    zenoh::Value value(buffer); \
+    options.set_value(value); \
+    z_client->get(          \
+        expr,    \
+        params,             \
+        std::move(send),            \
+        options);                        \
+    zenoh::Reply reply(nullptr);  \
+    recv(reply);  \
+    if (reply.is_ok()) { \
+        zenohc::Sample sample = zenohc::expect<zenoh::Sample>(reply.get()); \
+        output.ParseFromArray(sample.payload.start, sample.payload.len); \
+    } else {  \
+        std::cerr << "Failed zenoh query for key expression: "<< expr << std::endl; \
+    } \
+    
+// end of ZENOH
+
+class Placeholder {
 public:
-    FmuInstance(int k) {
-        key = k;
+    Placeholder(int index) {
+        instance_index = index;
     }
-    int key;
+    int instance_index;
 };
+
+std::string responderId;
+
+fmi3Status transformToFmi3Status(proto::Status status) {
+    switch (status) {
+        case proto::OK: return fmi3OK;
+        case proto::WARNING: return fmi3Warning;
+        case proto::DISCARD: return fmi3Discard;
+        case proto::ERROR: return fmi3Error;
+        case proto::FATAL: return fmi3Fatal;
+        default: throw std::invalid_argument("Invalid status value");
+    }
+}
+
+std::string getBaseDirectory() {
+    Dl_info dl_info;
+    dladdr((void*)getBaseDirectory, &dl_info);
+    std::filesystem::path libraryPath(dl_info.dli_fname);
+    return libraryPath.parent_path().parent_path().string(); 
+}
+
+void printDirectoryContents(const std::string& directoryPath) {
+    try {
+        // Check if the given path exists and is a directory
+        if (!std::filesystem::exists(directoryPath)) {
+            throw std::runtime_error("Directory does not exist: " + directoryPath);
+        }
+
+        if (!std::filesystem::is_directory(directoryPath)) {
+            throw std::runtime_error("Path is not a directory: " + directoryPath);
+        }
+
+        // Iterate through the directory
+        for (const auto& entry : std::filesystem::directory_iterator(directoryPath)) {
+            // Print the path of the current entry
+            std::cout << entry.path().string() << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+}
+
+void readResponderId() {
+    
+    std::string baseDirectory = getBaseDirectory();
+    std::string responderIdPath = baseDirectory + "/responderId";
+    std::ifstream file(responderIdPath);
+    if (!file.is_open()) {
+       printDirectoryContents(baseDirectory);
+       throw std::runtime_error("Failed to open responderId file at: " + responderIdPath);
+    }
+
+    std::string line;
+    std::regex regexPattern(R"(responderId='([^']+)')");
+    std::smatch match;
+
+    while (std::getline(file, line)) {
+        if (std::regex_search(line, match, regexPattern) && match.size() > 1) {
+            responderId = match.str(1);
+            return;
+        }
+    }
+
+    throw std::runtime_error("responderId not found in file: " + responderIdPath);
+    
+}
 
 extern "C" {
 
 const char* fmi3GetVersion() {
     return "3.0";
 }
+
 
 fmi3Instance fmi3InstantiateCoSimulation(
     fmi3String                     instanceName,
@@ -43,20 +147,47 @@ fmi3Instance fmi3InstantiateCoSimulation(
     fmi3InstanceEnvironment        instanceEnvironment,
     fmi3LogMessageCallback         logMessage,
     fmi3IntermediateUpdateCallback intermediateUpdate) {
-    
-    client = proto::fmi3::NewStub(grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
+    // TODO: implement the usage of fmi3InstanceEnvironment, fmi3LogMessageCallback
+    // and fmi3IntermediateUpdateCallback.
 
-    proto::Empty request;
-    proto::Instance reply;
-    grpc::ClientContext context;
-    grpc::Status status = client->instantiateCoSimulation(&context, request, &reply);
-    if (!status.ok()) {
-        std::cerr << status.error_message() << std::endl;
-        return nullptr;
+    // Read the responder id
+    readResponderId();
+    
+    // Start Zenoh Session
+    zenoh::Config config;
+    auto result = open(std::move(config));
+    if (std::holds_alternative<zenoh::Session>(result)) {
+        z_client = std::make_unique<zenoh::Session>(std::move(std::get<zenoh::Session>(result)));
+        std::cout << "Zenoh Session started successfully." << std::endl;
+    } else if (auto error = std::get_if<zenoh::ErrorMessage>(&result)) {
+         throw std::runtime_error(std::string(error->as_string_view()));
+    } else {
+        std::cerr << "Error: Unknown." << std::endl;
     }
-    FmuInstance* fmu_instance = new FmuInstance(reply.key());
-    return reinterpret_cast<fmi3Instance>(fmu_instance);
+    
+    proto::fmi3InstantiateCoSimulationMessage input;
+    proto::fmi3InstanceMessage output;
+
+    input.set_instance_name(instanceName);
+    input.set_instantiation_token(instantiationToken);
+    input.set_resource_path(resourcePath);
+    input.set_visible(visible);
+    input.set_logging_on(loggingOn);
+    input.set_event_mode_used(eventModeUsed);
+    input.set_early_return_allowed(earlyReturnAllowed);
+    for (int i = 0; i < nRequiredIntermediateVariables; ++i) {
+        input.add_required_intermediate_variables(requiredIntermediateVariables[i]); 
+    }
+    input.set_n_required_intermediate_variables(nRequiredIntermediateVariables);
+    
+    QUERY("fmi3InstantiateCoSimulation", input, output, responderId)
+
+    std::cout << "Instance: " << output.instance_index() << std::endl;
+
+    Placeholder* placeholder = new Placeholder(output.instance_index());
+    return reinterpret_cast<fmi3Instance>(placeholder);
 }
+
 
 fmi3Status fmi3EnterInitializationMode(
     fmi3Instance instance,
@@ -66,26 +197,20 @@ fmi3Status fmi3EnterInitializationMode(
     fmi3Boolean stopTimeDefined,
     fmi3Float64 stopTime) {
 
-    FmuInstance* fmu_instance = reinterpret_cast<FmuInstance*>(instance);
-    proto::enterInitializationModeRequest request;
-    request.set_key(fmu_instance->key);
-    request.set_tolerancedefined(toleranceDefined);
-    request.set_tolerance(tolerance);
-    request.set_starttime(startTime);
-    request.set_stoptimedefined(stopTimeDefined);
-    request.set_stoptime(stopTime);
-    proto::Empty reply;
-    grpc::ClientContext context;
-    grpc::Status status = client->enterInitializationMode(&context, request, &reply);
-    if (!status.ok()) {
-        std::cerr << status.error_message() << std::endl;
-        return fmi3Error;
-    } 
-    return fmi3OK;
+    proto::fmi3EnterInitializationModeMessage input;
+    proto::fmi3StatusMessage output;
 
+    SET_INSTANCE(input, instance)
+    input.set_tolerance_defined(toleranceDefined);
+    input.set_tolerance(tolerance);
+    input.set_start_time(startTime);
+    input.set_stop_time_defined(stopTimeDefined);
+    input.set_stop_time(stopTime);
+    
+    QUERY("fmi3EnterInitializationMode", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
 }
-
-
 
 fmi3Status fmi3DoStep(fmi3Instance instance,
     fmi3Float64 currentCommunicationPoint,
@@ -96,17 +221,21 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     fmi3Boolean* earlyReturn,
     fmi3Float64* lastSuccessfulTime) {
 
-    proto::Instance request;
-    FmuInstance* fmu_instance = reinterpret_cast<FmuInstance*>(instance);
-    request.set_key(fmu_instance->key);  
-    proto::Empty reply;
-    grpc::ClientContext context;
-    grpc::Status status = client->doStep(&context, request, &reply);
-    if (!status.ok()) {
-        std::cerr << status.error_message() << std::endl;
-        return fmi3Error;
-    } 
-    return fmi3OK;
+    proto::fmi3DoStepMessage input;
+    proto::fmi3StatusMessage output;
+    
+    SET_INSTANCE(input, instance) 
+    input.set_current_communication_point(currentCommunicationPoint);
+    input.set_communication_step_size(communicationStepSize);
+    input.set_no_set_fmu_state_prior_to_current_point(noSetFMUStatePriorToCurrentPoint);
+    input.set_event_handling_needed(*eventHandlingNeeded);
+    input.set_terminate_simulation(*terminateSimulation);
+    input.set_early_return(*earlyReturn);
+    input.set_last_successful_time(*lastSuccessfulTime);
+
+    QUERY("fmi3DoStep", input, output, responderId)
+    
+    return transformToFmi3Status(output.status());
 }
 
 fmi3Status fmi3GetFloat64(
@@ -116,69 +245,62 @@ fmi3Status fmi3GetFloat64(
     fmi3Float64 values[],
     size_t nValues) {
     
-    proto::getValue64Request request;
-    FmuInstance* fmu_instance = reinterpret_cast<FmuInstance*>(instance);
-    request.set_key(fmu_instance->key);  
+    proto::fmi3GetFloat64InputMessage input;
+    proto::fmi3GetFloat64OutputMessage output;
 
-    for (size_t i = 0; i < nValueReferences; ++i) {
-        request.add_valuereferences(valueReferences[i]);  
+    SET_INSTANCE(input, instance) 
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]); 
     }
+    input.set_n_value_references(nValueReferences);
+    
+    QUERY("fmi3GetFloat64", input, output, responderId)
 
-    proto::getFloat64Reply reply;
-    grpc::ClientContext context;
-    grpc::Status status = client->getFloat64(&context, request, &reply);
-    if (!status.ok()) {
-        std::cerr << status.error_message() << std::endl;
-        return fmi3Error;
+    for (int i = 0; i < output.n_values(); ++i) {
+        values[i] = output.values()[i]; 
     }
-
-    for (int i = 0; i < reply.values_size(); ++i) {
-        values[i] = reply.values(i);
-    }
-
-    return fmi3OK;
+    nValues = output.n_values();
+    
+    return transformToFmi3Status(output.status());
 }
 
 
-
-
 fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
-    proto::Instance request;
-    proto::Empty reply;
-    grpc::ClientContext context;
-    grpc::Status status = client->exitInitializationMode(&context, request, &reply);
-    if (!status.ok()) {
-        std::cerr << status.error_message() << std::endl;
-        return fmi3Error;
-    }
-    return fmi3OK;
+    
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
+    
+    SET_INSTANCE(input, instance)
+
+    QUERY("fmi3ExitInitializationMode", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
 }
 
 
 void fmi3FreeInstance(fmi3Instance instance) {
-    FmuInstance* fmu_instance = reinterpret_cast<FmuInstance*>(instance);
-    proto::Instance request;
-    request.set_key(fmu_instance->key);
-    proto::Empty reply;
-    grpc::ClientContext context;
-    grpc::Status status = client->freeInstance(&context, request, &reply);
-    if (!status.ok()) {
-        std::cerr << status.error_message() << std::endl;
-    } 
-    delete fmu_instance;
+
+    proto::fmi3InstanceMessage input;
+    proto::voidMessage output;
+
+    SET_INSTANCE(input, instance)
+
+    QUERY("fmi3FreeInstance", input, output, responderId)
+
+    delete placeholder;
+
+    z_client.reset();
 }
 
 fmi3Status fmi3Terminate(fmi3Instance instance) {
-    proto::Instance request;
-    proto::Empty reply;
-    grpc::ClientContext context;
-    grpc::Status status = client->terminate(&context, request, &reply);
-    if (!status.ok()) {
-        std::cerr << status.error_message() << std::endl;
-        return fmi3Error;
-    }
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
 
-    return fmi3OK;
+    SET_INSTANCE(input, instance)
+    
+    QUERY("fmi3Terminate", input, output, responderId)
+
+    return transformToFmi3Status(output.status());;
 }
 
 fmi3Status fmi3SetDebugLogging(
@@ -186,11 +308,21 @@ fmi3Status fmi3SetDebugLogging(
     fmi3Boolean loggingOn,
     size_t nCategories,
     const fmi3String categories[]) {
+
+    proto::fmi3SetDebugLoggingMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+    input.set_logging_on(loggingOn);
+    input.set_n_categories(nCategories);
+    for (int i = 0; i < nCategories; ++i) {
+        input.add_categories(categories[i]); 
+    }
     
-    // Missing body
-    return fmi3OK;
+    QUERY("fmi3SetDebugLogging", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
 }
 
 }
-
 

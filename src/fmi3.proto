@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package proto;
+
+message fmi3InstanceMessage {
+    int32 instance_index = 1;
+}
+
+enum Status {
+    OK = 0;
+    WARNING = 1;
+    DISCARD = 2;
+    ERROR = 3;
+    FATAL = 4;
+}
+
+message fmi3StatusMessage {
+    Status status = 1;
+}
+
+message fmi3InstantiateCoSimulationMessage{
+    string instance_name = 1;
+    string instantiation_token = 2;
+    string resource_path = 3;
+    bool visible = 4;
+    bool logging_on = 5;
+    bool event_mode_used = 6;
+    bool early_return_allowed = 7;
+    repeated int32 required_intermediate_variables = 8;
+    int32 n_required_intermediate_variables = 9;
+}
+
+message fmi3EnterInitializationModeMessage {
+    int32 instance_index = 1;
+    bool tolerance_defined = 2;
+    double tolerance = 3;
+    double start_time = 4;
+    bool stop_time_defined = 5;
+    double stop_time = 6;
+}
+
+
+message fmi3DoStepMessage {
+    int32 instance_index = 1;
+    double current_communication_point = 2;
+    double communication_step_size = 3;
+    bool no_set_fmu_state_prior_to_current_point = 4;
+    bool event_handling_needed = 5;
+    bool terminate_simulation = 6;
+    bool early_return = 7;
+    double last_successful_time = 8;
+}
+
+message fmi3GetFloat64InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetFloat64OutputMessage {
+  repeated double values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+
+message voidMessage {
+}
+
+message fmi3SetDebugLoggingMessage {
+    int32 instance_index = 1;
+    bool logging_on = 2;
+    int32 n_categories = 3;
+    repeated string categories = 4;
+}
+
+
+message Empty {
+    int32 value = 1;
+}
+
+
+
+message getFloat64Reply {
+  repeated double values = 1;  
+}
+
+
+message Array {
+    repeated double values = 1;
+}
