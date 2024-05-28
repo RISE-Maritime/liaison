@@ -14,7 +14,7 @@
 
 #define SET_INSTANCE(INPUT, INSTANCE) \
     Placeholder* placeholder = reinterpret_cast<Placeholder*>(INSTANCE); \
-    INPUT.set_instance(placeholder->instance);  \
+    INPUT.set_instance_index(placeholder->instance_index);  \
 
 std::string responder_id = "demo";
 
@@ -64,10 +64,10 @@ std::unique_ptr<zenoh::Session> z_client;
 
 class Placeholder {
 public:
-    Placeholder(int id) {
-        instance = id;
+    Placeholder(int index) {
+        instance_index = index;
     }
-    int instance;
+    int instance_index;
 };
 
 fmi3Status transformToFmi3Status(proto::Status status) {
@@ -133,9 +133,9 @@ fmi3Instance fmi3InstantiateCoSimulation(
     
     QUERY("fmi3InstantiateCoSimulation", input, output)
 
-    std::cout << "Instance: " << output.instance() << std::endl;
+    std::cout << "Instance: " << output.instance_index() << std::endl;
 
-    Placeholder* placeholder = new Placeholder(output.instance());
+    Placeholder* placeholder = new Placeholder(output.instance_index());
     return reinterpret_cast<fmi3Instance>(placeholder);
 }
 
