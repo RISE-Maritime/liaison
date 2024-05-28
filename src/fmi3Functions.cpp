@@ -36,7 +36,7 @@ std::unique_ptr<zenoh::Session> z_client;
 //      input.set_key(1);)
 //  2. A variable 'output' of a certain Protobuf messate type 
 //     is declared (e.g. proto::fmi3InstanceMessage output;).
-#define ZENOH_FMI3_QUERY(fmi3Function) \
+#define QUERY(fmi3Function, input, output) \
     size_t input_size = input.ByteSizeLong(); \
     std::vector<uint8_t> buffer(input_size); \
     input.SerializeToArray(buffer.data(), input_size); \
@@ -70,14 +70,14 @@ public:
     int instance;
 };
 
-fmi3Status extractFmi3Status(proto::fmi3StatusMessage status_message) {
-    switch (status_message.status()) {
+fmi3Status transformToFmi3Status(proto::Status status) {
+    switch (status) {
         case proto::OK: return fmi3OK;
         case proto::WARNING: return fmi3Warning;
         case proto::DISCARD: return fmi3Discard;
         case proto::ERROR: return fmi3Error;
         case proto::FATAL: return fmi3Fatal;
-        default: throw std::invalid_argument("Invalid FMI3Status value");
+        default: throw std::invalid_argument("Invalid status value");
     }
 }
 
@@ -131,7 +131,9 @@ fmi3Instance fmi3InstantiateCoSimulation(
     }
     input.set_n_required_intermediate_variables(nRequiredIntermediateVariables);
     
-    ZENOH_FMI3_QUERY("fmi3InstantiateCoSimulation")
+    QUERY("fmi3InstantiateCoSimulation", input, output)
+
+    std::cout << "Instance: " << output.instance() << std::endl;
 
     Placeholder* placeholder = new Placeholder(output.instance());
     return reinterpret_cast<fmi3Instance>(placeholder);
@@ -156,9 +158,9 @@ fmi3Status fmi3EnterInitializationMode(
     input.set_stop_time_defined(stopTimeDefined);
     input.set_stop_time(stopTime);
     
-    ZENOH_FMI3_QUERY("fmi3EnterInitializationMode")
+    QUERY("fmi3EnterInitializationMode", input, output)
 
-    return extractFmi3Status(output);
+    return transformToFmi3Status(output.status());
 }
 
 fmi3Status fmi3DoStep(fmi3Instance instance,
@@ -182,9 +184,9 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     input.set_early_return(*earlyReturn);
     input.set_last_successful_time(*lastSuccessfulTime);
 
-    ZENOH_FMI3_QUERY("fmi3DoStep")
+    QUERY("fmi3DoStep", input, output)
     
-    return extractFmi3Status(output);
+    return transformToFmi3Status(output.status());
 }
 
 fmi3Status fmi3GetFloat64(
@@ -194,22 +196,23 @@ fmi3Status fmi3GetFloat64(
     fmi3Float64 values[],
     size_t nValues) {
     
-    proto::fmi3GetFloat64Message input;
-    proto::fmi3StatusMessage output;
+    proto::fmi3GetFloat64InputMessage input;
+    proto::fmi3GetFloat64OutputMessage output;
 
     SET_INSTANCE(input, instance) 
     for (int i = 0; i < nValueReferences; ++i) {
         input.add_value_references(valueReferences[i]); 
     }
     input.set_n_value_references(nValueReferences);
-    for (int i = 0; i < nValues; ++i) {
-        input.add_values(values[i]); 
+    
+    QUERY("fmi3GetFloat64", input, output)
+
+    for (int i = 0; i < output.n_values(); ++i) {
+        values[i] = output.values()[i]; 
     }
-    input.set_n_values(nValues);
+    nValues = output.n_values();
     
-    ZENOH_FMI3_QUERY("fmi3GetFloat64")
-    
-    return extractFmi3Status(output);
+    return transformToFmi3Status(output.status());
 }
 
 
@@ -220,9 +223,9 @@ fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
     
     SET_INSTANCE(input, instance)
 
-    ZENOH_FMI3_QUERY("fmi3ExitInitializationMode")
+    QUERY("fmi3ExitInitializationMode", input, output)
 
-    return extractFmi3Status(output);
+    return transformToFmi3Status(output.status());
 }
 
 
@@ -233,9 +236,11 @@ void fmi3FreeInstance(fmi3Instance instance) {
 
     SET_INSTANCE(input, instance)
 
-    ZENOH_FMI3_QUERY("fmi3FreeInstance")
+    QUERY("fmi3FreeInstance", input, output)
 
     delete placeholder;
+
+    z_client.reset();
 }
 
 fmi3Status fmi3Terminate(fmi3Instance instance) {
@@ -244,9 +249,9 @@ fmi3Status fmi3Terminate(fmi3Instance instance) {
 
     SET_INSTANCE(input, instance)
     
-    ZENOH_FMI3_QUERY("fmi3Terminate")
+    QUERY("fmi3Terminate", input, output)
 
-    return extractFmi3Status(output);;
+    return transformToFmi3Status(output.status());;
 }
 
 fmi3Status fmi3SetDebugLogging(
@@ -265,9 +270,9 @@ fmi3Status fmi3SetDebugLogging(
         input.add_categories(categories[i]); 
     }
     
-    ZENOH_FMI3_QUERY("fmi3SetDebugLogging")
+    QUERY("fmi3SetDebugLogging", input, output)
 
-    return extractFmi3Status(output);
+    return transformToFmi3Status(output.status());
 }
 
 }

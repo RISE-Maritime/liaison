@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
-project(Liaison)
+project(PortalFMI)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -17,8 +17,7 @@ FetchContent_MakeAvailable(zenohcpp)
 
 # Include Protobuf
 find_package(Protobuf REQUIRED)
-message(STATUS "Using protobuf ${Protobuf_VERSION}")
-
+include_directories(${PROTOBUF_INCLUDE_DIR})
 
 # Incluce libzip
 find_package(PkgConfig REQUIRED)
@@ -26,31 +25,19 @@ pkg_check_modules(LIBZIP REQUIRED libzip)
 include_directories(${LIBZIP_INCLUDE_DIRS})
 link_directories(${LIBZIP_LIBRARY_DIRS})
 
-# Generate protobuf files
-include_directories(${PROTOBUF_INCLUDE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/fmi3")
-
 
 # Generate protobuf files
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS src/fmi3.proto)
 
-# Liaison Client
-add_executable(liaison_client src/liaison_client.cpp ${PROTO_SRCS} ${PROTO_HDRS})
-target_link_libraries(liaison_client PRIVATE zenohcxx::zenohc::lib ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB})
-
-# Liaison Server
-add_executable(liaison_server src/liaison_server.cpp ${PROTO_SRCS} ${PROTO_HDRS})
-target_link_libraries(liaison_server PRIVATE zenohcxx::zenohc::lib ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB})
-
 # Liaison FMU
-add_library(liaison SHARED src/fmi3Functions.cpp)
+add_library(liaison SHARED src/fmi3Functions.cpp ${PROTO_SRCS} ${PROTO_HDRS})
 target_link_libraries(liaison PRIVATE zenohcxx::zenohc::lib ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB} )
 
-
-# fmi3Server 
-add_executable(fmi3Server src/fmi3Server.cpp ${PROTO_SRCS} ${PROTO_HDRS})
-target_link_libraries(fmi3Server PRIVATE
+# PortalServer 
+add_executable(portal-server src/portalServer.cpp src/fmi3Logging.cpp ${PROTO_SRCS} ${PROTO_HDRS})
+target_link_libraries(portal-server PRIVATE
     zenohcxx::zenohc::lib 
     ${Zenohc_STATIC_LIB} 
     ${Protobuf_STATIC_LIB}
