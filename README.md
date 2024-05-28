@@ -6,13 +6,19 @@ By doing so, Liasion enables co-simulations across organisations without sharing
 
 ## Usage
 
+Build all the targets and `cd` to the `build` folder.
+
 ### Step 1: Create a "Liaision FMU"
 
-``liaison --make-fmu ./tests/BouncingBall.fmu fmus/bouncingball``
+``./liaison --make-fmu ../tests/BouncingBall.fmu fmus/bouncingball``
 
 ### Step 2: Run the "Liaison Server"
 
-``liaison --server ./tests/BouncingBall.fmu fmus/bouncingball``
+``./liaison --server ../tests/BouncingBall.fmu fmus/bouncingball``
+
+### Step 3: Simulat the "Liaison FMU"
+
+``fmpy simulate BouncingBallLiaison.fmu --show-plot``
 
 
 ## Development

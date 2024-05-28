@@ -303,10 +303,29 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     return 0;
 }
 
+
+std::string createResponderIdFile(const std::string& directory, const std::string& responderId) {
+    std::filesystem::path filePath = std::filesystem::path(directory) / "responderId";
+
+    std::ofstream file(filePath);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to create responderId file at: " + filePath.string());
+    }
+    file << "responderId='" << responderId << "'";
+    file.close();
+
+    // Verify 
+    if (!std::filesystem::exists(filePath)) {
+        throw std::runtime_error("responderId file creation failed at: " + filePath.string());
+    }
+    return filePath;
+}
+
 void generateFmu(const std::string& fmuPath, const std::string& responderId) {
     std::cout << "Generating Liaison FMU using:" << std::endl;
     std::cout << "  FMU: '" << fmuPath << "'" << std::endl;
     std::cout << "  responderId: '" << responderId << "'" << std::endl;;
+
     
 
     std::filesystem::path fmuFilePath(fmuPath);
@@ -337,10 +356,18 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
         return;
     }
 
-    // Add the modelDescription.xml file to the FMU at the root
+    // Add the modelDescription.xml file to the FMU at the base directory
     std::string modelDescriptionPath = tempPath + "/modelDescription.xml";
     if (!addFileToZip(fmu, modelDescriptionPath, "modelDescription.xml")) {
         std::cerr << "Error adding modelDescription.xml file to FMU." << std::endl;
+        zip_discard(fmu);
+        return;
+    }
+
+    // Add the responderId.txt fiel to the FMU at the base directory
+    std::string responderIdPath = createResponderIdFile(tempPath, responderId);
+    if (!addFileToZip(fmu, responderIdPath, "binaries/responderId")) {
+        std::cerr << "Error copyng the responderId file to FMU." << std::endl;
         zip_discard(fmu);
         return;
     }

@@ -15,8 +15,13 @@ RUN apt-get update && apt-get install -y \
     cmake \
     zenoh \
     libzip-dev \
+    python3 \
+    python3-pip \
     # Cleanup apt cache to reduce image size
     && rm -rf /var/lib/apt/lists/*
+
+# Install FMPy
+RUN python3 -m pip install fmpy[complete]==0.3.20
 
 # Download and build Protobuf from source
 ARG PROTOBUF_VERSION=3.20.1
