@@ -1,4 +1,10 @@
 #include <stdexcept>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <regex>
+#include <dlfcn.h>
+#include <filesystem>
 #include "zenoh.hxx"
 #include "zenohc.hxx"
 #include "fmi3.pb.h"
@@ -16,31 +22,16 @@
     Placeholder* placeholder = reinterpret_cast<Placeholder*>(INSTANCE); \
     INPUT.set_instance_index(placeholder->instance_index);  \
 
-std::string responder_id = "demo";
 
 // ZENOH 
 
 std::unique_ptr<zenoh::Session> z_client;
 
-// This macro makes a remote procedure call in the form of a query
-// to Zenoh queryable. The argument fmi3Function is the name of the
-// function to be called in the remote resource. An variable named 
-// 'input' is the input to said function and should be an instance
-// of a Protobuf message type.
-// This macro requires that:
-//  1.  A variable 'responder_id' of type std::string is declared
-//      and defined following the key expression specification of 
-//      Zenoh (e.g. std::string responder_id = "foo/bar").
-//  1.  A variable 'input' of a certain Protobuf message type
-//      is declared and defined (e.g. proto::fmi3InstanceMessage input; 
-//      input.set_key(1);)
-//  2. A variable 'output' of a certain Protobuf messate type 
-//     is declared (e.g. proto::fmi3InstanceMessage output;).
-#define QUERY(fmi3Function, input, output) \
+#define QUERY(fmi3Function, input, output, responderId) \
     size_t input_size = input.ByteSizeLong(); \
     std::vector<uint8_t> buffer(input_size); \
     input.SerializeToArray(buffer.data(), input_size); \
-    std::string expr = "rpc/" + responder_id + "/" + fmi3Function; \
+    std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
     auto [send, recv] = zenohc::reply_fifo_new(1);   \
     const char* params = ""; \
     zenoh::GetOptions options; \
@@ -70,6 +61,8 @@ public:
     int instance_index;
 };
 
+std::string responderId;
+
 fmi3Status transformToFmi3Status(proto::Status status) {
     switch (status) {
         case proto::OK: return fmi3OK;
@@ -79,6 +72,59 @@ fmi3Status transformToFmi3Status(proto::Status status) {
         case proto::FATAL: return fmi3Fatal;
         default: throw std::invalid_argument("Invalid status value");
     }
+}
+
+std::string getBaseDirectory() {
+    Dl_info dl_info;
+    dladdr((void*)getBaseDirectory, &dl_info);
+    std::filesystem::path libraryPath(dl_info.dli_fname);
+    return libraryPath.parent_path().parent_path().string(); 
+}
+
+void printDirectoryContents(const std::string& directoryPath) {
+    try {
+        // Check if the given path exists and is a directory
+        if (!std::filesystem::exists(directoryPath)) {
+            throw std::runtime_error("Directory does not exist: " + directoryPath);
+        }
+
+        if (!std::filesystem::is_directory(directoryPath)) {
+            throw std::runtime_error("Path is not a directory: " + directoryPath);
+        }
+
+        // Iterate through the directory
+        for (const auto& entry : std::filesystem::directory_iterator(directoryPath)) {
+            // Print the path of the current entry
+            std::cout << entry.path().string() << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+}
+
+void readResponderId() {
+    
+    std::string baseDirectory = getBaseDirectory();
+    std::string responderIdPath = baseDirectory + "/responderId";
+    std::ifstream file(responderIdPath);
+    if (!file.is_open()) {
+       printDirectoryContents(baseDirectory);
+       throw std::runtime_error("Failed to open responderId file at: " + responderIdPath);
+    }
+
+    std::string line;
+    std::regex regexPattern(R"(responderId='([^']+)')");
+    std::smatch match;
+
+    while (std::getline(file, line)) {
+        if (std::regex_search(line, match, regexPattern) && match.size() > 1) {
+            responderId = match.str(1);
+            return;
+        }
+    }
+
+    throw std::runtime_error("responderId not found in file: " + responderIdPath);
+    
 }
 
 extern "C" {
@@ -103,6 +149,9 @@ fmi3Instance fmi3InstantiateCoSimulation(
     fmi3IntermediateUpdateCallback intermediateUpdate) {
     // TODO: implement the usage of fmi3InstanceEnvironment, fmi3LogMessageCallback
     // and fmi3IntermediateUpdateCallback.
+
+    // Read the responder id
+    readResponderId();
     
     // Start Zenoh Session
     zenoh::Config config;
@@ -131,7 +180,7 @@ fmi3Instance fmi3InstantiateCoSimulation(
     }
     input.set_n_required_intermediate_variables(nRequiredIntermediateVariables);
     
-    QUERY("fmi3InstantiateCoSimulation", input, output)
+    QUERY("fmi3InstantiateCoSimulation", input, output, responderId)
 
     std::cout << "Instance: " << output.instance_index() << std::endl;
 
@@ -158,7 +207,7 @@ fmi3Status fmi3EnterInitializationMode(
     input.set_stop_time_defined(stopTimeDefined);
     input.set_stop_time(stopTime);
     
-    QUERY("fmi3EnterInitializationMode", input, output)
+    QUERY("fmi3EnterInitializationMode", input, output, responderId)
 
     return transformToFmi3Status(output.status());
 }
@@ -184,7 +233,7 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     input.set_early_return(*earlyReturn);
     input.set_last_successful_time(*lastSuccessfulTime);
 
-    QUERY("fmi3DoStep", input, output)
+    QUERY("fmi3DoStep", input, output, responderId)
     
     return transformToFmi3Status(output.status());
 }
@@ -205,7 +254,7 @@ fmi3Status fmi3GetFloat64(
     }
     input.set_n_value_references(nValueReferences);
     
-    QUERY("fmi3GetFloat64", input, output)
+    QUERY("fmi3GetFloat64", input, output, responderId)
 
     for (int i = 0; i < output.n_values(); ++i) {
         values[i] = output.values()[i]; 
@@ -223,7 +272,7 @@ fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
     
     SET_INSTANCE(input, instance)
 
-    QUERY("fmi3ExitInitializationMode", input, output)
+    QUERY("fmi3ExitInitializationMode", input, output, responderId)
 
     return transformToFmi3Status(output.status());
 }
@@ -236,7 +285,7 @@ void fmi3FreeInstance(fmi3Instance instance) {
 
     SET_INSTANCE(input, instance)
 
-    QUERY("fmi3FreeInstance", input, output)
+    QUERY("fmi3FreeInstance", input, output, responderId)
 
     delete placeholder;
 
@@ -249,7 +298,7 @@ fmi3Status fmi3Terminate(fmi3Instance instance) {
 
     SET_INSTANCE(input, instance)
     
-    QUERY("fmi3Terminate", input, output)
+    QUERY("fmi3Terminate", input, output, responderId)
 
     return transformToFmi3Status(output.status());;
 }
@@ -270,7 +319,7 @@ fmi3Status fmi3SetDebugLogging(
         input.add_categories(categories[i]); 
     }
     
-    QUERY("fmi3SetDebugLogging", input, output)
+    QUERY("fmi3SetDebugLogging", input, output, responderId)
 
     return transformToFmi3Status(output.status());
 }
