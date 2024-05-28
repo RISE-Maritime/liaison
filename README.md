@@ -14,6 +14,19 @@ Download ...
 `python3 make_portal_fmu.py "BouncingBall" "./build/libliaison.so" "./modelDescription.xml" "./tests"`
 
 
+### Test
+
+In a terminal, `cd` to the `build` folder and start the liaison server:
+
+``./portal-server ../tests/BouncingBall.fmu``
+
+In a terminal, `cd` to the `tests` folder and create the Liaison FMU with the command:
+
+``python3 ../make_portal_fmu.py "BouncingBall" "../build/libliaison.so" "./modelDescription.xml" "./" ``
+
+Then, in the same terminal, run the Liaison FMU withthe command:
+``fmpy simulate BouncingBallPortal.fmu --show-plot``
+
 ### Step 2: Run the `PortalServer` fo.
 1. Creating a PortalFMU.
 2. Running the PortalServer. 
