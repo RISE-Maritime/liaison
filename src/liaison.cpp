@@ -2,21 +2,19 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <unordered_map>
-#include <zip.h>
-#include <fstream>
 #include <filesystem>
-#include <dlfcn.h>
+#include <zip.h>
+
 #include "zenoh.hxx"
 #include "fmi3.pb.h"
 #include "fmi3Functions.h"
-#include "fmi3Logging.hpp"
+#include "utils.hpp"
 
 
 // MACROS
 
-#define DECLARE_QUERYABLE(FMI3FUNCTION) \
-    std::string expr_##FMI3FUNCTION = "rpc/" + responder_id + "/" + std::string(#FMI3FUNCTION); \
-    std::cout << expr_##FMI3FUNCTION << std::endl; \
+#define DECLARE_QUERYABLE(FMI3FUNCTION, RESPONDER_ID) \
+    std::string expr_##FMI3FUNCTION = "rpc/" + RESPONDER_ID + "/" + std::string(#FMI3FUNCTION); \
     zenoh::KeyExprView keyexpr_##FMI3FUNCTION(expr_##FMI3FUNCTION); \
     auto queryable_##FMI3FUNCTION = zenoh::expect<zenoh::Queryable>(z_server.declare_queryable(keyexpr_##FMI3FUNCTION,callbacks::FMI3FUNCTION));
 
@@ -37,72 +35,10 @@
 
 // end of MACROS
 
-// Map that holds the fmi3 instances
+// Map that holds the FMU instances
 std::unordered_map<int, fmi3Instance> instances;
 int nextIndex = 0;
 
-void createDirectories(const std::string& path) {
-    std::filesystem::create_directories(path);
-}
-
-std::string createTempDirectory() {
-    char tempDirTemplate[] = "/tmp/liaison.XXXXXX";
-    char* tempDirPath = mkdtemp(tempDirTemplate);
-    if (tempDirPath == nullptr) {
-        throw std::runtime_error("Failed to create temporary directory.");
-    }
-    return std::string(tempDirPath);
-}
-
-void unzipFmu(const std::string& fmuPath, const std::string& outputDir) {
-    int err = 0;
-    zip *z = zip_open(fmuPath.c_str(), 0, &err);
-    if (z == nullptr) {
-        throw std::runtime_error("Failed to open FMU zip file.");
-    }
-
-    // Create output directory if it doesn't exist
-    createDirectories(outputDir);
-
-    struct zip_stat st;
-    zip_stat_init(&st);
-    zip_file *zf = nullptr;
-
-    for (int i = 0; i < zip_get_num_entries(z, 0); ++i) {
-        if (zip_stat_index(z, i, 0, &st) == 0) {
-            std::string outPath = outputDir + "/" + st.name;
-
-            // If it's a directory, create it
-            if (outPath.back() == '/') {
-                createDirectories(outPath);
-            } else {
-                zf = zip_fopen_index(z, i, 0);
-                if (!zf) {
-                    zip_close(z);
-                    throw std::runtime_error("Failed to open file in zip archive.");
-                }
-
-                // Ensure the directory for the file exists
-                createDirectories(std::filesystem::path(outPath).parent_path().string());
-
-                std::ofstream outFile(outPath, std::ios::binary);
-                if (!outFile) {
-                    zip_fclose(zf);
-                    zip_close(z);
-                    throw std::runtime_error("Failed to create file on disk: " + outPath);
-                }
-
-                std::vector<char> buffer(st.size);
-                zip_fread(zf, buffer.data(), st.size);
-                outFile.write(buffer.data(), buffer.size());
-
-                outFile.close();
-                zip_fclose(zf);
-            }
-        }
-    }
-    zip_close(z);
-}
 
 const fmi3ValueReference* convertRepeatedFieldToCArray(const google::protobuf::RepeatedField<int>& repeatedField) {
     size_t size = repeatedField.size();
@@ -158,29 +94,6 @@ namespace fmu {
     fmi3TerminateTYPE* fmi3Terminate;
 } 
 
-bool is_valid_utf8(const std::string& string) {
-    std::string::const_iterator it = string.begin();
-    while (it != string.end()) {
-        if ((*it & 0x80) == 0x00) { // ASCII
-            ++it;
-        } else if ((*it & 0xE0) == 0xC0) { // 2-byte UTF-8
-            if (it + 1 == string.end() || (it[1] & 0xC0) != 0x80) return false;
-            it += 2;
-        } else if ((*it & 0xF0) == 0xE0) { // 3-byte UTF-8
-            if (it + 2 >= string.end() || (it[1] & 0xC0) != 0x80 || (it[2] & 0xC0) != 0x80) return false;
-            it += 3;
-        } else if ((*it & 0xF8) == 0xF0) { // 4-byte UTF-8
-            if (it + 3 >= string.end() || (it[1] & 0xC0) != 0x80 || (it[2] & 0xC0) != 0x80 || (it[3] & 0xC0) != 0x80) return false;
-            it += 4;
-        } else {
-            return false;
-        }
-    }
-    return true;
-}
-
-
-
 namespace callbacks {
 
     void fmi3InstantiateCoSimulation(const zenoh::Query& query) {
@@ -210,7 +123,7 @@ namespace callbacks {
         proto::fmi3InstanceMessage output;
         instances[nextIndex] = instance;
         
-        output.set_instance(nextIndex);
+        output.set_instance_index(nextIndex);
         SERIALIZE_REPLY(query, output)
     }
 
@@ -222,7 +135,7 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         fmi3Status status = fmu::fmi3EnterInitializationMode(
-            getInstance(input.instance()),
+            getInstance(input.instance_index()),
             input.tolerance_defined(),
             input.tolerance(),
             input.start_time(),
@@ -240,7 +153,7 @@ namespace callbacks {
         proto::fmi3InstanceMessage input;
         PARSE_QUERY(query, input)
 
-        fmi3Status status = fmu::fmi3ExitInitializationMode(getInstance(input.instance()));
+        fmi3Status status = fmu::fmi3ExitInitializationMode(getInstance(input.instance_index()));
 
         proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
         SERIALIZE_REPLY(query, output)
@@ -253,12 +166,12 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         try {
-            fmu::fmi3FreeInstance(getInstance(input.instance()));
+            fmu::fmi3FreeInstance(getInstance(input.instance_index()));
         } catch (std::runtime_error& error) {
             std::cerr << "Failed to free FMU instance." << std::endl;
         }
         try {
-            auto it = instances.find(input.instance());
+            auto it = instances.find(input.instance_index());
             instances.erase(it); 
         } catch (std::runtime_error& error) {
             std::cerr << "Failed to erase instance from instances." << std::endl;
@@ -280,7 +193,7 @@ namespace callbacks {
         fmi3Boolean early_return = input.early_return();
         fmi3Float64 last_successful_time = input.last_successful_time();
         fmi3Status status = fmu::fmi3DoStep(
-            getInstance(input.instance()),
+            getInstance(input.instance_index()),
             input.current_communication_point(),
             input.communication_step_size(),
             input.no_set_fmu_state_prior_to_current_point(),
@@ -308,7 +221,7 @@ namespace callbacks {
         size_t nValues = input.n_value_references();
 
         fmi3Status status = fmu::fmi3GetFloat64(
-            getInstance(input.instance()),
+            getInstance(input.instance_index()),
             value_references,
             input.n_value_references(),
             values,
@@ -331,7 +244,7 @@ namespace callbacks {
         proto::fmi3InstanceMessage input;
         PARSE_QUERY(query, input)
 
-        fmi3Status status = fmu::fmi3Terminate(getInstance(input.instance()));
+        fmi3Status status = fmu::fmi3Terminate(getInstance(input.instance_index()));
 
         proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
         SERIALIZE_REPLY(query, output)
@@ -339,19 +252,17 @@ namespace callbacks {
 
 }
 
-int main(int argc, char* argv[]) {
 
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <path_to_fmu>" << std::endl;
-        return 1;
-    }
+int startServer(const std::string& fmuPath, const std::string& responderId) {
+    std::cout << "Starting server using:" << std::endl;
+    std::cout << "  FMU: " << fmuPath << std::endl;
+    std::cout << "  responderId: " << responderId << std::endl;
 
-    // Load the FMU shared library
-    std::string fmuPath = argv[1];
-     std::filesystem::path fmuFilePath(fmuPath);
-    std::string fmuName = fmuFilePath.stem().string();
-    unzipFmu(fmuPath, "./tmp");
-    std::string libPath = "./tmp/binaries/x86_64-linux/" + fmuName + ".so";
+    // Load the FMU library
+    std::filesystem::path fmuFilePath(fmuPath);
+    std::string modelName = fmuFilePath.stem().string();
+    std::string tempPath = unzipFmu(fmuPath);
+    std::string libPath = tempPath + "/binaries/x86_64-linux/" + modelName + ".so";
     void* fmuLibrary = dlopen(libPath.c_str(), RTLD_LAZY);
     if (!fmuLibrary) {
         throw std::runtime_error("Failed to load FMU library: " + std::string(dlerror()));
@@ -366,24 +277,20 @@ int main(int argc, char* argv[]) {
     BIND_FMU_LIBRARY_FUNCTION(fmi3GetFloat64)
     BIND_FMU_LIBRARY_FUNCTION(fmi3Terminate)
 
-    // TODO declare responder_id elsewhere
-    std::string responder_id = "demo";
-
     // Start Zenoh Session
     zenoh::Config config;
-    printf("Opening session...\n");
     auto z_server = zenoh::expect<zenoh::Session>(zenoh::open(std::move(config)));
 
     // Queryable declarations
-    DECLARE_QUERYABLE(fmi3InstantiateCoSimulation)
-    DECLARE_QUERYABLE(fmi3EnterInitializationMode)
-    DECLARE_QUERYABLE(fmi3ExitInitializationMode)
-    DECLARE_QUERYABLE(fmi3FreeInstance)
-    DECLARE_QUERYABLE(fmi3DoStep)
-    DECLARE_QUERYABLE(fmi3GetFloat64)
-    DECLARE_QUERYABLE(fmi3Terminate)
+    DECLARE_QUERYABLE(fmi3InstantiateCoSimulation, responderId)
+    DECLARE_QUERYABLE(fmi3EnterInitializationMode, responderId)
+    DECLARE_QUERYABLE(fmi3ExitInitializationMode, responderId)
+    DECLARE_QUERYABLE(fmi3FreeInstance, responderId)
+    DECLARE_QUERYABLE(fmi3DoStep, responderId)
+    DECLARE_QUERYABLE(fmi3GetFloat64, responderId)
+    DECLARE_QUERYABLE(fmi3Terminate, responderId)
 
-    printf("Portal Server is listening!\n");
+    printf("Now is listening!\n");
     printf("Enter 'q' to quit...\n");
     int c = 0;
     while (c != 'q') {
@@ -391,6 +298,92 @@ int main(int argc, char* argv[]) {
         if (c == -1) {
             usleep(1);
         }
+    }
+
+    return 0;
+}
+
+void generateFmu(const std::string& fmuPath, const std::string& responderId) {
+    std::cout << "Generating Liaison FMU using:" << std::endl;
+    std::cout << "  FMU: '" << fmuPath << "'" << std::endl;
+    std::cout << "  responderId: '" << responderId << "'" << std::endl;;
+    
+
+    std::filesystem::path fmuFilePath(fmuPath);
+    std::string modelName = fmuFilePath.stem().string();
+    std::string tempPath = unzipFmu(fmuPath);
+
+    if (tempPath.empty()) {
+        std::cerr << "Failed to unzip FMU." << std::endl;
+        return;
+    }
+    
+    std::string outputFmuPath = "./" + modelName + "Liaison.fmu";
+
+    // Create the ZIP/FMU archive
+    int error = 0;
+    zip_t* fmu = zip_open(outputFmuPath.c_str(), ZIP_CREATE | ZIP_TRUNCATE, &error);
+    if (!fmu) {
+        std::cerr << "Failed to create FMU at: " << outputFmuPath << std::endl;
+        return;
+    }
+
+    // Add the renamed DLL file to the FMU inside the binaries/platform directory
+    std::string originalDllPath ="./binaries/x86_64-linux/libliaisonfmu.so";
+    std::string renamedDllPath = "binaries/x86_64-linux/" + modelName + ".so";    
+    if (!addFileToZip(fmu, originalDllPath, renamedDllPath)) {
+        std::cerr << "Error adding Liaison Dynamic Library file to FMU." << std::endl;
+        zip_discard(fmu);
+        return;
+    }
+
+    // Add the modelDescription.xml file to the FMU at the root
+    std::string modelDescriptionPath = tempPath + "/modelDescription.xml";
+    if (!addFileToZip(fmu, modelDescriptionPath, "modelDescription.xml")) {
+        std::cerr << "Error adding modelDescription.xml file to FMU." << std::endl;
+        zip_discard(fmu);
+        return;
+    }
+
+    // Close the zip archive
+    if (zip_close(fmu) < 0) {
+        std::cerr << "Failed to finalize FMU zip archive" << std::endl;
+        return;
+    }
+
+    std::cout << "FMU successfully created! "  << std::endl;
+}
+
+
+void printUsage() {
+    std::cout << "Usage:\n";
+    std::cout << "  liaison --server <Path to FMU> <Responder Id>\n";
+    std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id>\n";
+}
+
+int main(int argc, char* argv[]) {
+
+    if (argc != 4) {
+        printUsage();
+        return 1;
+    }
+
+    std::string option = argv[1];
+    std::string fmuPath = argv[2];
+    std::string responderId = argv[3];
+
+    try {
+        if (option == "--server") {
+            startServer(fmuPath, responderId);
+        } else if (option == "--make-fmu") {
+            generateFmu(fmuPath, responderId);
+        } else {
+            printUsage();
+            return 1;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
     }
 
     return 0;
