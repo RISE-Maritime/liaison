@@ -1,9 +1,26 @@
-# Liaison (in development)
+# PortalFMI (in development)
+
+PortalFMI enables co-simulations across organisations without sharing intellectual property by levaraging the [FMI standard](https://www.fmi-standard.org) and the communication protocol [Zenoh](https://zenoh.io). 
+
+
+## Installation
+
+Download ...
+
+## Usage
+
+### Step 1: Create a `PortalFMU`
+
+`python3 make_portal_fmu.py "BouncingBall" "./build/libliaison.so" "./modelDescription.xml" "./tests"`
+
+
+### Step 2: Run the `PortalServer` fo.
+1. Creating a PortalFMU.
+2. Running the PortalServer. 
 
 ## Development
 
 This repository contains the necessary files for developing Liaision smoothly in VSCode. To do so, you must have the VSCode extension "DevContainers". 
-
 
 ## Old 
 

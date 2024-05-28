@@ -2,15 +2,17 @@ import zipfile
 import os
 import sys
 
-def make_liaison_fmu(model_name, dll_path, xml_path, output_dir, platform='x86_64-windows'):
-    output_fmu_path = os.path.join(output_dir, model_name + ".fmu")
+def make_portal_fmu(model_name, dll_path, xml_path, output_dir):
+    output_fmu_path = os.path.join(output_dir, model_name + "Portal" + ".fmu")
+    platform = "x86_64-linux"
 
     with zipfile.ZipFile(output_fmu_path, 'w', zipfile.ZIP_DEFLATED) as fmu:
+    
         # Define the binary folder structure inside the FMU
         binaries_dir = os.path.join('binaries', platform)
-        
+
         # Change the name of the DLL file to match the model_name
-        new_dll_name = model_name + ".dll"
+        new_dll_name = model_name + ".so"
         dll_arcname = os.path.join(binaries_dir, new_dll_name)
         
         # Add the renamed DLL file to the FMU inside the binaries/platform directory
@@ -23,7 +25,7 @@ def make_liaison_fmu(model_name, dll_path, xml_path, output_dir, platform='x86_6
 
 if __name__ == "__main__":
     if len(sys.argv) != 5:
-        print("Usage: python pack_fmu.py <model_name> <path_to_dll> <path_to_modelDescription.xml> <output_directory>")
+        print("Usage: python make_portal_fmu.py <model_name> <path_to_dll> <path_to_modelDescription.xml> <output_directory>")
         sys.exit(1)
 
     model_name = sys.argv[1]
@@ -31,4 +33,4 @@ if __name__ == "__main__":
     xml_path = sys.argv[3]
     output_dir = sys.argv[4]
 
-    make_liaison_fmu(model_name, dll_path, xml_path, output_dir)
+    make_portal_fmu(model_name, dll_path, xml_path, output_dir)

@@ -6,6 +6,18 @@ message fmi3InstanceMessage {
     int32 instance = 1;
 }
 
+enum Status {
+    OK = 0;
+    WARNING = 1;
+    DISCARD = 2;
+    ERROR = 3;
+    FATAL = 4;
+}
+
+message fmi3StatusMessage {
+    Status status = 1;
+}
+
 message fmi3InstantiateCoSimulationMessage{
     string instance_name = 1;
     string instantiation_token = 2;
@@ -39,13 +51,18 @@ message fmi3DoStepMessage {
     double last_successful_time = 8;
 }
 
-message fmi3GetFloat64Message {
+message fmi3GetFloat64InputMessage {
   int32 instance = 1; 
   repeated int32 value_references = 2;  
   int32 n_value_references = 3;
-  repeated double values = 4;
-  int32 n_values = 5;
 }
+
+message fmi3GetFloat64OutputMessage {
+  repeated double values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
 
 message voidMessage {
 }
@@ -61,19 +78,6 @@ message fmi3SetDebugLoggingMessage {
 message Empty {
     int32 value = 1;
 }
-
-enum Status {
-    OK = 0;
-    WARNING = 1;
-    DISCARD = 2;
-    ERROR = 3;
-    FATAL = 4;
-}
-
-message fmi3StatusMessage {
-    Status status = 1;
-}
-
 
 
 
