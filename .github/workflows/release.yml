@@ -1,6 +1,9 @@
-name: Build
+name: Release
+
 on:
-  push:
+  release:
+    types: [published]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,8 +24,7 @@ jobs:
           docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace my-devcontainer-image \
           bash -c "mkdir -p build && cd build && cmake .. && make"
 
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v3
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v21
         with:
-          name: build-artifacts
-          path: build/
+          files: build/liaison
