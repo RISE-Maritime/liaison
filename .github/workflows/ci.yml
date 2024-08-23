@@ -1,0 +1,19 @@
+name: Build
+on:
+  push:
+jobs:
+  build-project:
+    name: Build Project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v4.1.7
+
+      - name: Build Project
+        uses: threeal/cmake-action@v2.0.0
+# - name: Pre-build dev container image
+#   uses: devcontainers/ci@v0.3
+#   with:
+#     imageName: ghcr.io/example/example-devcontainer
+#     cacheFrom: ghcr.io/example/example-devcontainer
+#     push: always
