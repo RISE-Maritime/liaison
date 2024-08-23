@@ -23,6 +23,12 @@ jobs:
         run: |
           docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace my-devcontainer-image \
           bash -c "mkdir -p build && cd build && cmake .. && make"
+      - name: Debug Build Output
+        run: |
+          echo "Listing build directory:"
+          ls -la /
+          ls -la build/
+          
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
