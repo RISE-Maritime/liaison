@@ -2,18 +2,27 @@ name: Build
 on:
   push:
 jobs:
-  build-project:
-    name: Build Project
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Project
-        uses: actions/checkout@v4.1.7
 
-      - name: Build Project
-        uses: threeal/cmake-action@v2.0.0
-# - name: Pre-build dev container image
-#   uses: devcontainers/ci@v0.3
-#   with:
-#     imageName: ghcr.io/example/example-devcontainer
-#     cacheFrom: ghcr.io/example/example-devcontainer
-#     push: always
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and tag DevContainer image
+        run: |
+          docker build -t my-devcontainer-image .devcontainer
+
+      - name: Run DevContainer and build project
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace my-devcontainer-image \
+          bash -c "mkdir -p build && cd build && cmake .. && make"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: build/
