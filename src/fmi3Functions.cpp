@@ -6,7 +6,6 @@
 #include <dlfcn.h>
 #include <filesystem>
 #include "zenoh.hxx"
-#include "zenohc.hxx"
 #include "fmi3.pb.h"
 #include "fmi3Functions.h"
 
@@ -25,32 +24,32 @@
 
 // ZENOH 
 
-std::unique_ptr<zenoh::Session> z_client;
+std::unique_ptr<zenoh::Session> session;
 
 #define QUERY(fmi3Function, input, output, responderId) \
-    size_t input_size = input.ByteSizeLong(); \
-    std::vector<uint8_t> buffer(input_size); \
-    input.SerializeToArray(buffer.data(), input_size); \
+    std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
+    input.SerializeToArray(input_wire.data(), input_wire.size()); \
     std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
-    auto [send, recv] = zenohc::reply_fifo_new(1);   \
-    const char* params = ""; \
-    zenoh::GetOptions options; \
-    zenoh::Value value(buffer); \
-    options.set_value(value); \
-    z_client->get(          \
-        expr,    \
-        params,             \
-        std::move(send),            \
-        options);                        \
-    zenoh::Reply reply(nullptr);  \
-    recv(reply);  \
-    if (reply.is_ok()) { \
-        zenohc::Sample sample = zenohc::expect<zenoh::Sample>(reply.get()); \
-        output.ParseFromArray(sample.payload.start, sample.payload.len); \
-    } else {  \
-        std::cerr << "Failed zenoh query for key expression: "<< expr << std::endl; \
-    } \
+    zenoh::Session::GetOptions options; \
+    options.target = zenoh::QueryTarget::Z_QUERY_TARGET_ALL; \
+    options.payload = zenoh::Bytes(std::move(input_wire)); \
+    auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
+    auto res = replies.recv(); \
+    const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
+    const auto& output_payload = sample.get_payload(); \
+    std::vector<uint8_t> output_wire = output_payload.as_vector(); \
+    output.ParseFromArray(output_wire.data(), output_wire.size()); \
     
+    // for (auto res = replies.recv(); std::holds_alternative<zenoh::Reply>(res); res = replies.recv()) { \
+    //     const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
+    //     auto output_payload = sample.get_payload(); \
+    //     output_wire = output_payload->get().as_vector(); \
+    //     output.ParseFromArray(output_wire.data(), output_wire.size()); \
+    // } \
+
+    
+
+
 // end of ZENOH
 
 class Placeholder {
@@ -154,15 +153,13 @@ fmi3Instance fmi3InstantiateCoSimulation(
     readResponderId();
     
     // Start Zenoh Session
-    zenoh::Config config;
-    auto result = open(std::move(config));
-    if (std::holds_alternative<zenoh::Session>(result)) {
-        z_client = std::make_unique<zenoh::Session>(std::move(std::get<zenoh::Session>(result)));
+    try {
+        zenoh::Config config = zenoh::Config::create_default();
+        session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(config)));
         std::cout << "Zenoh Session started successfully." << std::endl;
-    } else if (auto error = std::get_if<zenoh::ErrorMessage>(&result)) {
-         throw std::runtime_error(std::string(error->as_string_view()));
-    } else {
-        std::cerr << "Error: Unknown." << std::endl;
+    } catch (const std::exception &e) {
+        std::cerr << "Failed to start Zenoh Session: " << e.what() << std::endl;
+        throw; // Re-throw the exception to propagate the error
     }
     
     proto::fmi3InstantiateCoSimulationMessage input;
@@ -289,7 +286,7 @@ void fmi3FreeInstance(fmi3Instance instance) {
 
     delete placeholder;
 
-    z_client.reset();
+    session.reset();
 }
 
 fmi3Status fmi3Terminate(fmi3Instance instance) {
