@@ -39,16 +39,6 @@ std::unique_ptr<zenoh::Session> session;
     const auto& output_payload = sample.get_payload(); \
     std::vector<uint8_t> output_wire = output_payload.as_vector(); \
     output.ParseFromArray(output_wire.data(), output_wire.size()); \
-    
-    // for (auto res = replies.recv(); std::holds_alternative<zenoh::Reply>(res); res = replies.recv()) { \
-    //     const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
-    //     auto output_payload = sample.get_payload(); \
-    //     output_wire = output_payload->get().as_vector(); \
-    //     output.ParseFromArray(output_wire.data(), output_wire.size()); \
-    // } \
-
-    
-
 
 // end of ZENOH
 
