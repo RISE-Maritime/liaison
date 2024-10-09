@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <zip.h>
+#include <iostream>
 
 #include "zenoh.hxx"
 #include "fmi3.pb.h"
@@ -15,20 +16,23 @@
 
 #define DECLARE_QUERYABLE(FMI3FUNCTION, RESPONDER_ID) \
     std::string expr_##FMI3FUNCTION = "rpc/" + RESPONDER_ID + "/" + std::string(#FMI3FUNCTION); \
-    zenoh::KeyExprView keyexpr_##FMI3FUNCTION(expr_##FMI3FUNCTION); \
-    auto queryable_##FMI3FUNCTION = zenoh::expect<zenoh::Queryable>(z_server.declare_queryable(keyexpr_##FMI3FUNCTION,callbacks::FMI3FUNCTION));
+    zenoh::KeyExpr keyexpr_##FMI3FUNCTION(expr_##FMI3FUNCTION); \
+    auto on_drop_queryable_##FMI3FUNCTION = []() { std::cout << "Destroying queryable for " << #FMI3FUNCTION << "\n"; }; \
+    auto queryable_##FMI3FUNCTION = session.declare_queryable(keyexpr_##FMI3FUNCTION, std::function<void(const zenoh::Query&)>(callbacks::FMI3FUNCTION), on_drop_queryable_##FMI3FUNCTION); \
 
 #define PARSE_QUERY(QUERY, INPUT) \
-    auto query_value = QUERY.get_value(); \
-    INPUT.ParseFromArray(query_value.payload.start, query_value.payload.len); \
+    auto input_payload = QUERY.get_payload(); \
+    if (input_payload.has_value()) { \
+        const auto input_wire =  input_payload->get().as_vector(); \
+        INPUT.ParseFromArray(input_wire.data(), input_wire.size()); \
+    } \
 
 #define SERIALIZE_REPLY(QUERY, OUTPUT) \
-    size_t output_size = OUTPUT.ByteSizeLong(); \
-    std::vector<uint8_t> buffer(output_size); \
-    OUTPUT.SerializeToArray(buffer.data(), output_size); \
-    zenoh::QueryReplyOptions options; \
-    options.set_encoding(zenoh::Encoding(Z_ENCODING_PREFIX_APP_CUSTOM)); \
-    QUERY.reply(QUERY.get_keyexpr(), buffer); \
+    std::vector<uint8_t> output_wire(OUTPUT.ByteSizeLong()); \
+    OUTPUT.SerializeToArray(output_wire.data(), output_wire.size()); \
+    auto output_payload = zenoh::Bytes(std::move(output_wire)); \
+    QUERY.reply(QUERY.get_keyexpr(), std::move(output_payload)); \
+
 
 #define BIND_FMU_LIBRARY_FUNCTION(FMI3FUNCTION) \
     fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)dlsym(fmuLibrary, #FMI3FUNCTION);
@@ -278,8 +282,8 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     BIND_FMU_LIBRARY_FUNCTION(fmi3Terminate)
 
     // Start Zenoh Session
-    zenoh::Config config;
-    auto z_server = zenoh::expect<zenoh::Session>(zenoh::open(std::move(config)));
+    zenoh::Config config = zenoh::Config::create_default();
+    auto session = zenoh::Session::open(std::move(config));
 
     // Queryable declarations
     DECLARE_QUERYABLE(fmi3InstantiateCoSimulation, responderId)

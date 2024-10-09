@@ -1,0 +1,68 @@
+# Use the official Ubuntu 22.04 LTS image
+FROM ubuntu:24.04
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install required packages
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    curl \
+    wget \
+    libssl-dev \
+    zlib1g-dev \
+    pkg-config \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain 1.81.0 -y \
+    && echo 'source $HOME/.cargo/env' >> ~/.bashrc
+
+# Ensure the path is set for future commands in the Dockerfile
+ENV PATH="/root/.cargo/bin:$PATH"
+
+# Verify Rust and Cargo installation
+RUN rustup --version && cargo --version
+
+# Set working directory
+WORKDIR /workspaces
+
+# Build and install Zenoh-c
+RUN git clone https://github.com/eclipse-zenoh/zenoh-c.git /workspaces/zenoh-c
+WORKDIR /workspaces/zenoh-c/build
+RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=FALSE && \
+    cmake --build . --target install
+
+
+# Build and install Zenoh-cpp
+RUN git clone https://github.com/eclipse-zenoh/zenoh-cpp.git /workspaces/zenoh-cpp
+WORKDIR /workspaces/zenoh-cpp/build
+RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=FALSE && \
+    cmake --build . --target install 
+
+    
+# Download and build Protobuf from source
+ARG PROTOBUF_VERSION=3.20.1
+RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
+    tar -xzf protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
+    cd protobuf-${PROTOBUF_VERSION} && \
+    ./configure CXXFLAGS=-fPIC && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig
+
+
+# Libzip 
+RUN apt-get update && apt-get install -y libzip-dev 
+
+# Set working directory back to /workspaces
+WORKDIR /workspaces
+
+# Copy your project files into the container
+COPY . /workspaces
+
+CMD ["bash"]

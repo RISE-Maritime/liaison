@@ -1,2 +1,6 @@
 build
+lib
+lib64
+pyvenv.cf
+bin
 __pycache__

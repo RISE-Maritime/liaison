@@ -1,22 +1,23 @@
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
-project(Liaison)
+project(Liaison LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+if(CMAKE_BUILD_TYPE STREQUAL "")
+    set(CMAKE_BUILD_TYPE Release)
+endif()
 
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Statically link dependencies
-set(Zenohc_STATIC_LIB "/usr/local/lib/libzenohc.a")
-set(Protobuf_STATIC_LIB "/usr/local/lib/libprotobuf.a")
+# Prefer static libraries
+set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+set(BUILD_SHARED_LIBS OFF)
 
-# Include Zenoh-Cpp
-include(FetchContent)
-find_package(zenohc) # Zenoh-c, as well as rust, is installed in the devcontainer 
-FetchContent_declare(zenohcpp GIT_REPOSITORY "https://github.com/eclipse-zenoh/zenoh-cpp" GIT_TAG release-0.10.1-rc)
-FetchContent_MakeAvailable(zenohcpp)
+# Include Zenoh-c and Zenoh-cpp
+find_package(zenohc REQUIRED STATIC)
+find_package(zenohcxx REQUIRED STATIC)
 
 # Include Protobuf
-find_package(Protobuf REQUIRED)
+find_package(Protobuf REQUIRED STATIC)
 include_directories(${PROTOBUF_INCLUDE_DIR})
 
 # Incluce libzip
@@ -25,12 +26,24 @@ pkg_check_modules(LIBZIP REQUIRED libzip)
 include_directories(${LIBZIP_INCLUDE_DIRS})
 link_directories(${LIBZIP_LIBRARY_DIRS})
 
-# Include directories with header files
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/fmi3")
-
 # Generate protobuf files
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS src/fmi3.proto)
+
+# Include directories with header files
+include_directories(${CMAKE_CURRENT_BINARY_DIR}) # for gen. protobuf files
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/fmi3")
+
+# Liaison 
+add_executable(liaison src/liaison.cpp src/utils.cpp ${PROTO_SRCS} ${PROTO_HDRS})
+target_link_libraries(liaison PRIVATE
+    zenohcxx::zenohc
+    ${PROTOBUF_LIBRARIES}
+    ${LIBZIP_LIBRARIES}
+    -static-libgcc
+    -static-libstdc++
+    -lpthread
+    -ldl
+)
 
 # Liaison Lib
 set(LIAISON_OUTPUT_DIR ${CMAKE_BINARY_DIR}/binaries/x86_64-linux)
@@ -41,13 +54,18 @@ set_target_properties(liaisonfmu PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
     ARCHIVE_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
 )
-target_link_libraries(liaisonfmu PRIVATE zenohcxx::zenohc::lib ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB})
+target_link_libraries(liaisonfmu PRIVATE zenohcxx::zenohc ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB})
 
-# Liaison 
-add_executable(liaison src/liaison.cpp src/utils.cpp ${PROTO_SRCS} ${PROTO_HDRS})
-target_link_libraries(liaison PRIVATE
-    zenohcxx::zenohc::lib 
-    ${Zenohc_STATIC_LIB} 
-    ${Protobuf_STATIC_LIB}
-    ${LIBZIP_LIBRARIES}
-)
+# add_executable(z_get src/z_get.cxx)
+# include_directories("${CMAKE_SOURCE_DIR}/src")
+# target_link_libraries(z_get PRIVATE zenohcxx::zenohc)
+# set_property(TARGET z_get PROPERTY LANGUAGE CXX)
+# set_property(TARGET z_get PROPERTY CXX_STANDARD 17)
+
+# add_executable(z_queryable src/z_queryable.cxx)
+# include_directories("${CMAKE_SOURCE_DIR}/src")
+# target_link_libraries(z_queryable PRIVATE zenohcxx::zenohc)
+# set_property(TARGET z_queryable PROPERTY LANGUAGE CXX)
+# set_property(TARGET z_queryable PROPERTY CXX_STANDARD 17)
+
+
