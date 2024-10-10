@@ -54,18 +54,20 @@ set_target_properties(liaisonfmu PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
     ARCHIVE_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
 )
-target_link_libraries(liaisonfmu PRIVATE zenohcxx::zenohc ${Zenohc_STATIC_LIB} ${Protobuf_STATIC_LIB})
-
-# add_executable(z_get src/z_get.cxx)
-# include_directories("${CMAKE_SOURCE_DIR}/src")
-# target_link_libraries(z_get PRIVATE zenohcxx::zenohc)
-# set_property(TARGET z_get PROPERTY LANGUAGE CXX)
-# set_property(TARGET z_get PROPERTY CXX_STANDARD 17)
-
-# add_executable(z_queryable src/z_queryable.cxx)
-# include_directories("${CMAKE_SOURCE_DIR}/src")
-# target_link_libraries(z_queryable PRIVATE zenohcxx::zenohc)
-# set_property(TARGET z_queryable PROPERTY LANGUAGE CXX)
-# set_property(TARGET z_queryable PROPERTY CXX_STANDARD 17)
+target_link_libraries(liaisonfmu PRIVATE
+    zenohcxx::zenohc
+    ${PROTOBUF_LIBRARIES}
+    ${LIBZIP_LIBRARIES}
+    -static-libgcc
+    -static-libstdc++
+    -lpthread
+    -ldl
+)
 
 
+
+
+add_executable(test_liaison_fmu src/test_liaison_fmu.cpp)
+target_link_libraries(test_liaison_fmu PRIVATE
+ ${CMAKE_BINARY_DIR}/binaries/x86_64-linux/libliaisonfmu.so
+)

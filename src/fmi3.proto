@@ -30,6 +30,22 @@ message fmi3InstantiateCoSimulationMessage{
     int32 n_required_intermediate_variables = 9;
 }
 
+message fmi3InstantiateModelExchangeMessage{
+    string instance_name = 1;
+    string instantiation_token = 2;
+    string resource_path = 3;
+    bool visible = 4;
+    bool logging_on = 5;
+}
+
+message fmi3InstantiateScheduledExecutionMessage{
+    string instance_name = 1;
+    string instantiation_token = 2;
+    string resource_path = 3;
+    bool visible = 4;
+    bool logging_on = 5;
+}
+
 message fmi3EnterInitializationModeMessage {
     int32 instance_index = 1;
     bool tolerance_defined = 2;
@@ -50,6 +66,27 @@ message fmi3DoStepMessage {
     bool early_return = 7;
     double last_successful_time = 8;
 }
+
+message fmi3GetFloat32InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetFloat32OutputMessage {
+  repeated float values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+message fmi3SetFloat64InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated double values = 4;
+  int32 n_values = 5;
+}
+
 
 message fmi3GetFloat64InputMessage {
   int32 instance_index = 1; 

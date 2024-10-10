@@ -27,6 +27,7 @@
 std::unique_ptr<zenoh::Session> session;
 
 #define QUERY(fmi3Function, input, output, responderId) \
+    std::cout << "Querying " << fmi3Function << std::endl; \
     std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
     input.SerializeToArray(input_wire.data(), input_wire.size()); \
     std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
@@ -35,6 +36,9 @@ std::unique_ptr<zenoh::Session> session;
     options.payload = zenoh::Bytes(std::move(input_wire)); \
     auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
     auto res = replies.recv(); \
+    if (!std::holds_alternative<zenoh::Reply>(res)) { \
+        throw std::runtime_error("Expected zenoh::Reply but got something else"); \
+    } \
     const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
     const auto& output_payload = sample.get_payload(); \
     std::vector<uint8_t> output_wire = output_payload.as_vector(); \
@@ -116,6 +120,21 @@ void readResponderId() {
     
 }
 
+void StartZenohSession() {
+    // Read the responder id
+    readResponderId();
+    // Start Zenoh Session
+    try {
+        zenoh::Config config = zenoh::Config::create_default();
+        session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(config)));
+        // auto session = zenoh::Session::open(std::move(config));
+        std::cout << "Zenoh Session started successfully." << std::endl;
+    } catch (const std::exception &e) {
+        std::cerr << "Failed to start Zenoh Session: " << e.what() << std::endl;
+        throw; // Re-throw the exception to propagate the error
+    }
+}
+
 extern "C" {
 
 const char* fmi3GetVersion() {
@@ -139,18 +158,7 @@ fmi3Instance fmi3InstantiateCoSimulation(
     // TODO: implement the usage of fmi3InstanceEnvironment, fmi3LogMessageCallback
     // and fmi3IntermediateUpdateCallback.
 
-    // Read the responder id
-    readResponderId();
-    
-    // Start Zenoh Session
-    try {
-        zenoh::Config config = zenoh::Config::create_default();
-        session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(config)));
-        std::cout << "Zenoh Session started successfully." << std::endl;
-    } catch (const std::exception &e) {
-        std::cerr << "Failed to start Zenoh Session: " << e.what() << std::endl;
-        throw; // Re-throw the exception to propagate the error
-    }
+    StartZenohSession();
     
     proto::fmi3InstantiateCoSimulationMessage input;
     proto::fmi3InstanceMessage output;
@@ -173,6 +181,77 @@ fmi3Instance fmi3InstantiateCoSimulation(
 
     Placeholder* placeholder = new Placeholder(output.instance_index());
     return reinterpret_cast<fmi3Instance>(placeholder);
+}
+
+fmi3Instance fmi3InstantiateModelExchange(
+    fmi3String                     instanceName,
+    fmi3String                     instantiationToken,
+    fmi3String                     resourcePath,
+    fmi3Boolean                    visible,
+    fmi3Boolean                    loggingOn,
+    fmi3InstanceEnvironment        instanceEnvironment,
+    fmi3LogMessageCallback         logMessage) {
+
+    StartZenohSession();
+    
+    proto::fmi3InstantiateModelExchangeMessage input;
+    proto::fmi3InstanceMessage output;
+
+    input.set_instance_name(instanceName);
+    input.set_instantiation_token(instantiationToken);
+    input.set_resource_path(resourcePath);
+    input.set_visible(visible);
+    input.set_logging_on(loggingOn);
+
+    QUERY("fmi3InstantiateModelExchange", input, output, responderId)
+
+    std::cout << "Instance: " << output.instance_index() << std::endl;
+
+    Placeholder* placeholder = new Placeholder(output.instance_index());
+    return reinterpret_cast<fmi3Instance>(placeholder);
+}
+
+fmi3Instance fmi3InstantiateScheduledExecution(
+    fmi3String                     instanceName,
+    fmi3String                     instantiationToken,
+    fmi3String                     resourcePath,
+    fmi3Boolean                    visible,
+    fmi3Boolean                    loggingOn,
+    fmi3InstanceEnvironment        instanceEnvironment,
+    fmi3LogMessageCallback         logMessage,
+    fmi3ClockUpdateCallback        clockUpdate,
+    fmi3LockPreemptionCallback     lockPreemption,
+    fmi3UnlockPreemptionCallback   unlockPreemption) {
+
+    StartZenohSession();
+
+    proto::fmi3InstantiateScheduledExecutionMessage input;
+    proto::fmi3InstanceMessage output;
+
+    input.set_instance_name(instanceName);
+    input.set_instantiation_token(instantiationToken);
+    input.set_resource_path(resourcePath);
+    input.set_visible(visible);
+    input.set_logging_on(loggingOn);
+    // TODO: implement functionality for instanceEnvironment, clockUpdate, lockPeemption, and unlockPreemption
+
+    QUERY("fmi3InstantiateScheduledExecution", input, output, responderId)
+
+    std::cout << "Instance: " << output.instance_index() << std::endl;
+
+    Placeholder* placeholder = new Placeholder(output.instance_index());
+    return reinterpret_cast<fmi3Instance>(placeholder);
+}
+
+fmi3Status fmi3EnterEventMode(fmi3Instance instance) {
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+
+    QUERY("fmi3EnterEventMode", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
 }
 
 
@@ -222,6 +301,57 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
 
     QUERY("fmi3DoStep", input, output, responderId)
     
+    return transformToFmi3Status(output.status());
+}
+
+fmi3Status fmi3GetFloat32(
+    fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    fmi3Float32 values[],
+    size_t nValues) {
+    
+    proto::fmi3GetFloat32InputMessage input;
+    proto::fmi3GetFloat32OutputMessage output;
+
+    SET_INSTANCE(input, instance) 
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]); 
+    }
+    input.set_n_value_references(nValueReferences);
+    
+    QUERY("fmi3GetFloat32", input, output, responderId)
+
+    for (int i = 0; i < output.n_values(); ++i) {
+        values[i] = output.values()[i]; 
+    }
+    nValues = output.n_values();
+    
+    return transformToFmi3Status(output.status());
+}
+
+fmi3Status fmi3SetFloat64(
+    fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    const fmi3Float64 values[],
+    size_t nValues) {
+    
+    proto::fmi3SetFloat64InputMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance) 
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]); 
+    }
+    input.set_n_value_references(nValueReferences);
+    for (int i = 0; i < nValues; ++i) {
+        input.add_values(values[i]); 
+    }
+    input.set_n_values(nValues);
+    
+    QUERY("fmi3SetFloat64", input, output, responderId)
+
     return transformToFmi3Status(output.status());
 }
 
@@ -279,6 +409,17 @@ void fmi3FreeInstance(fmi3Instance instance) {
     session.reset();
 }
 
+fmi3Status fmi3Reset(fmi3Instance instance) {
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+    
+    QUERY("fmi3Reset", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
+}
+
 fmi3Status fmi3Terminate(fmi3Instance instance) {
     proto::fmi3InstanceMessage input;
     proto::fmi3StatusMessage output;
@@ -310,6 +451,5 @@ fmi3Status fmi3SetDebugLogging(
 
     return transformToFmi3Status(output.status());
 }
-
 }
 

@@ -59,6 +59,12 @@ RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PR
 # Libzip 
 RUN apt-get update && apt-get install -y libzip-dev 
 
+# Python and FMPy
+RUN apt-get update && apt-get install -y python3 python3-pip
+RUN apt-get install pipx
+RUN pipx install fmpy[complete]==0.3.20
+RUN pipx ensurepath
+
 # Set working directory back to /workspaces
 WORKDIR /workspaces
 
