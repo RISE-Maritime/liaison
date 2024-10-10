@@ -90,11 +90,17 @@ proto::fmi3StatusMessage makeFmi3StatusMessage(fmi3Status status) {
 
 namespace fmu {
     fmi3InstantiateCoSimulationTYPE* fmi3InstantiateCoSimulation;
+    fmi3InstantiateModelExchangeTYPE* fmi3InstantiateModelExchange;
+    fmi3InstantiateScheduledExecutionTYPE* fmi3InstantiateScheduledExecution;
+    fmi3EnterEventModeTYPE* fmi3EnterEventMode;
     fmi3EnterInitializationModeTYPE* fmi3EnterInitializationMode;
     fmi3ExitInitializationModeTYPE* fmi3ExitInitializationMode;
     fmi3FreeInstanceTYPE* fmi3FreeInstance;
     fmi3DoStepTYPE* fmi3DoStep;
+    fmi3GetFloat32TYPE* fmi3GetFloat32;
+    fmi3SetFloat64TYPE* fmi3SetFloat64;
     fmi3GetFloat64TYPE* fmi3GetFloat64;
+    fmi3ResetTYPE* fmi3Reset;
     fmi3TerminateTYPE* fmi3Terminate;
 } 
 
@@ -128,6 +134,66 @@ namespace callbacks {
         instances[nextIndex] = instance;
         
         output.set_instance_index(nextIndex);
+        SERIALIZE_REPLY(query, output)
+    }
+
+    void fmi3InstantiateModelExchange(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3InstantiateModelExchangeMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3Instance instance = fmu::fmi3InstantiateModelExchange(
+            input.instance_name().c_str(),
+            input.instantiation_token().c_str(),
+            nullptr,
+            input.visible(),
+            input.logging_on(),
+            nullptr,
+            fmi3LogMessage
+        );
+
+        proto::fmi3InstanceMessage output;
+        instances[nextIndex] = instance;
+        
+        output.set_instance_index(nextIndex);
+        SERIALIZE_REPLY(query, output)
+
+    }
+    
+    void fmi3InstantiateScheduledExecution(const zenoh::Query& query) {
+        printQuery(query);
+        proto::fmi3InstantiateScheduledExecutionMessage input;
+        PARSE_QUERY(query, input)
+        fmi3Instance instance = fmu::fmi3InstantiateScheduledExecution(
+            input.instance_name().c_str(),
+            input.instantiation_token().c_str(),
+            nullptr,
+            input.visible(),
+            input.logging_on(),
+            nullptr,
+            fmi3LogMessage,
+            nullptr,
+            nullptr,
+            nullptr
+        );
+
+        proto::fmi3InstanceMessage output;
+        instances[nextIndex] = instance;
+        
+        output.set_instance_index(nextIndex);
+        SERIALIZE_REPLY(query, output)
+    }
+
+    void fmi3EnterEventMode(const zenoh::Query& query) {
+        printQuery(query);
+        
+        proto::fmi3InstanceMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3Status status = fmu::fmi3EnterEventMode(getInstance(input.instance_index()));
+
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
         SERIALIZE_REPLY(query, output)
     }
 
@@ -211,6 +277,65 @@ namespace callbacks {
         SERIALIZE_REPLY(query, output)
     }
 
+    void fmi3GetFloat32(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3GetFloat32InputMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3ValueReference value_references[input.n_value_references()];
+        for (int i = 0; i < input.n_value_references(); i++) {
+            value_references[i] = input.value_references()[i];
+        }
+        fmi3Float32 values[input.n_value_references()];
+        size_t nValues = input.n_value_references();
+
+        fmi3Status status = fmu::fmi3GetFloat32(
+            getInstance(input.instance_index()),
+            value_references,
+            input.n_value_references(),
+            values,
+            nValues
+        );
+
+        proto::fmi3GetFloat32OutputMessage output;
+        for (int i = 0; i < input.n_value_references(); i++) {
+            output.add_values(values[i]);
+        }
+        output.set_n_values(nValues);
+        output.set_status(transformToProtoStatus(status));
+
+        SERIALIZE_REPLY(query, output)
+    }
+
+    void fmi3SetFloat64(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3SetFloat64InputMessage input;
+        
+        PARSE_QUERY(query, input)
+
+        fmi3ValueReference value_references[input.n_value_references()];
+        for (int i = 0; i < input.n_value_references(); i++) {
+            value_references[i] = input.value_references()[i];
+        }
+        fmi3Float64 values[input.n_value_references()];
+        for (int i = 0; i < input.n_value_references(); i++) {
+            values[i] = input.values()[i];
+        }
+
+        fmi3Status status = fmu::fmi3SetFloat64(
+            getInstance(input.instance_index()),
+            value_references,
+            input.n_value_references(),
+            values,
+            input.n_values()
+        );
+        
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
+        SERIALIZE_REPLY(query, output)
+    }
+
     void fmi3GetFloat64(const zenoh::Query& query) {
         printQuery(query);
 
@@ -241,6 +366,20 @@ namespace callbacks {
 
         SERIALIZE_REPLY(query, output)
     }
+
+    
+    void fmi3Reset(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3InstanceMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3Status status = fmu::fmi3Reset(getInstance(input.instance_index()));
+
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
+        SERIALIZE_REPLY(query, output)
+    }
+
 
     void fmi3Terminate(const zenoh::Query& query) {
         printQuery(query);
@@ -294,7 +433,7 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     DECLARE_QUERYABLE(fmi3GetFloat64, responderId)
     DECLARE_QUERYABLE(fmi3Terminate, responderId)
 
-    printf("Now is listening!\n");
+    printf("Liaison server is now listening!\n");
     printf("Enter 'q' to quit...\n");
     int c = 0;
     while (c != 'q') {
