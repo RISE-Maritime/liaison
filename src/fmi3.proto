@@ -18,6 +18,7 @@ message fmi3StatusMessage {
     Status status = 1;
 }
 
+
 message fmi3InstantiateCoSimulationMessage{
     string instance_name = 1;
     string instantiation_token = 2;
@@ -67,6 +68,16 @@ message fmi3DoStepMessage {
     double last_successful_time = 8;
 }
 
+// Set and Get Float32
+
+message fmi3SetFloat32InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated float values = 4;
+  int32 n_values = 5;
+}
+
 message fmi3GetFloat32InputMessage {
   int32 instance_index = 1; 
   repeated int32 value_references = 2;  
@@ -79,6 +90,8 @@ message fmi3GetFloat32OutputMessage {
   Status status = 3;
 }
 
+// Set and Get Float64
+
 message fmi3SetFloat64InputMessage {
   int32 instance_index = 1; 
   repeated int32 value_references = 2;  
@@ -86,7 +99,6 @@ message fmi3SetFloat64InputMessage {
   repeated double values = 4;
   int32 n_values = 5;
 }
-
 
 message fmi3GetFloat64InputMessage {
   int32 instance_index = 1; 
@@ -96,6 +108,248 @@ message fmi3GetFloat64InputMessage {
 
 message fmi3GetFloat64OutputMessage {
   repeated double values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get Int8
+
+message fmi3SetInt8InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated int32 values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetInt8InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetInt8OutputMessage {
+  repeated int32 values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get UInt8
+
+message fmi3SetUInt8InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated uint32 values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetUInt8InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetUInt8OutputMessage {
+  repeated uint32 values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get Int16
+
+message fmi3SetInt16InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated int32 values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetInt16InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetInt16OutputMessage {
+  repeated int32 values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get UInt16
+
+message fmi3SetUInt16InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated uint32 values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetUInt16InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetUInt16OutputMessage {
+  repeated uint32 values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get Int32
+
+message fmi3SetInt32InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated int32 values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetInt32InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetInt32OutputMessage {
+  repeated int32 values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get UInt32
+
+message fmi3SetUInt32InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated uint32 values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetUInt32InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetUInt32OutputMessage {
+  repeated uint32 values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get Int64
+
+message fmi3SetInt64InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated int64 values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetInt64InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetInt64OutputMessage {
+  repeated int64 values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get UInt64
+
+message fmi3SetUInt64InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated uint64 values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetUInt64InputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetUInt64OutputMessage {
+  repeated uint64 values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get Boolean
+
+message fmi3SetBooleanInputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated bool values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetBooleanInputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetBooleanOutputMessage {
+  repeated bool values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get String
+
+message fmi3SetStringInputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated string values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetStringInputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetStringOutputMessage {
+  repeated string values = 1;
+  int32 n_values = 2;
+  Status status = 3;
+}
+
+// Set and Get Clock
+
+message fmi3SetClockInputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+  repeated bool values = 4;
+  int32 n_values = 5;
+}
+
+message fmi3GetClockInputMessage {
+  int32 instance_index = 1; 
+  repeated int32 value_references = 2;  
+  int32 n_value_references = 3;
+}
+
+message fmi3GetClockOutputMessage {
+  repeated bool values = 1;
   int32 n_values = 2;
   Status status = 3;
 }
