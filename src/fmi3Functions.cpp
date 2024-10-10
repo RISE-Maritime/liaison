@@ -9,6 +9,9 @@
 #include "fmi3.pb.h"
 #include "fmi3Functions.h"
 
+// MACROS
+
+
 #define TRY_CODE(FUNCTION_CALL, ERROR_MSG, ERROR_RETURN) \
     try {                                                          \
         FUNCTION_CALL                                             \
@@ -22,9 +25,50 @@
     INPUT.set_instance_index(placeholder->instance_index);  \
 
 
-// ZENOH 
 
-std::unique_ptr<zenoh::Session> session;
+#define DEFINE_FMI3_SET_VALUE_FUNCTION(TYPE) \
+fmi3Status fmi3Set##TYPE( \
+    fmi3Instance instance, \
+    const fmi3ValueReference valueReferences[], \
+    size_t nValueReferences, \
+    const fmi3##TYPE values[], \
+    size_t nValues) { \
+    proto::fmi3Set##TYPE##InputMessage input; \
+    proto::fmi3StatusMessage output; \
+    SET_INSTANCE(input, instance); \
+    for (size_t i = 0; i < nValueReferences; ++i) { \
+        input.add_value_references(valueReferences[i]); \
+    } \
+    input.set_n_value_references(nValueReferences); \
+    for (size_t i = 0; i < nValues; ++i) { \
+        input.add_values(values[i]); \
+    } \
+    input.set_n_values(nValues); \
+    QUERY("fmi3Set"#TYPE, input, output, responderId); \
+    return transformToFmi3Status(output.status()); \
+}
+
+#define DEFINE_FMI3_GET_VALUE_FUNCTION(TYPE) \
+fmi3Status fmi3Get##TYPE( \
+    fmi3Instance instance, \
+    const fmi3ValueReference valueReferences[], \
+    size_t nValueReferences, \
+    fmi3##TYPE values[], \
+    size_t nValues) { \
+    proto::fmi3Get##TYPE##InputMessage input; \
+    proto::fmi3Get##TYPE##OutputMessage output; \
+    SET_INSTANCE(input, instance); \
+    for (size_t i = 0; i < nValueReferences; ++i) { \
+        input.add_value_references(valueReferences[i]); \
+    } \
+    input.set_n_value_references(nValueReferences); \
+    QUERY("fmi3Get"#TYPE, input, output, responderId); \
+    for (size_t i = 0; i < output.values_size(); ++i) { \
+        values[i] = output.values(i); \
+    } \
+    nValues = output.values_size(); \
+    return transformToFmi3Status(output.status()); \
+}
 
 #define QUERY(fmi3Function, input, output, responderId) \
     std::cout << "Querying " << fmi3Function << std::endl; \
@@ -44,7 +88,12 @@ std::unique_ptr<zenoh::Session> session;
     std::vector<uint8_t> output_wire = output_payload.as_vector(); \
     output.ParseFromArray(output_wire.data(), output_wire.size()); \
 
-// end of ZENOH
+// end of MACROS
+
+
+std::unique_ptr<zenoh::Session> session;
+
+
 
 class Placeholder {
 public:
@@ -122,63 +171,21 @@ void readResponderId() {
 
 void StartZenohSession() {
     // Read the responder id
-    readResponderId();
+    try {
+        readResponderId();
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        throw;
+    }
     // Start Zenoh Session
     try {
         zenoh::Config config = zenoh::Config::create_default();
         session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(config)));
-        // auto session = zenoh::Session::open(std::move(config));
         std::cout << "Zenoh Session started successfully." << std::endl;
     } catch (const std::exception &e) {
         std::cerr << "Failed to start Zenoh Session: " << e.what() << std::endl;
-        throw; // Re-throw the exception to propagate the error
+        throw;
     }
-}
-
-// Get and Set functions
-
-#define DEFINE_FMI3_SET_FUNCTION(TYPE, INPUT_MESSAGE, QUERY_NAME) \
-fmi3Status fmi3Set##TYPE( \
-    fmi3Instance instance, \
-    const fmi3ValueReference valueReferences[], \
-    size_t nValueReferences, \
-    const fmi3##TYPE values[], \
-    size_t nValues) { \
-    proto::INPUT_MESSAGE input; \
-    proto::fmi3StatusMessage output; \
-    SET_INSTANCE(input, instance); \
-    for (size_t i = 0; i < nValueReferences; ++i) { \
-        input.add_value_references(valueReferences[i]); \
-    } \
-    input.set_n_value_references(nValueReferences); \
-    for (size_t i = 0; i < nValues; ++i) { \
-        input.add_values(values[i]); \
-    } \
-    input.set_n_values(nValues); \
-    QUERY(QUERY_NAME, input, output, responderId); \
-    return transformToFmi3Status(output.status()); \
-}
-
-#define DEFINE_FMI3_GET_FUNCTION(TYPE, INPUT_MESSAGE, OUTPUT_MESSAGE, QUERY_NAME) \
-fmi3Status fmi3Get##TYPE( \
-    fmi3Instance instance, \
-    const fmi3ValueReference valueReferences[], \
-    size_t nValueReferences, \
-    fmi3##TYPE values[], \
-    size_t nValues) { \
-    proto::INPUT_MESSAGE input; \
-    proto::OUTPUT_MESSAGE output; \
-    SET_INSTANCE(input, instance); \
-    for (size_t i = 0; i < nValueReferences; ++i) { \
-        input.add_value_references(valueReferences[i]); \
-    } \
-    input.set_n_value_references(nValueReferences); \
-    QUERY(QUERY_NAME, input, output, responderId); \
-    for (size_t i = 0; i < output.values_size(); ++i) { \
-        values[i] = output.values(i); \
-    } \
-    nValues = output.values_size(); \
-    return transformToFmi3Status(output.status()); \
 }
 
 
@@ -210,8 +217,9 @@ fmi3Instance fmi3InstantiateCoSimulation(
     // TODO: implement the usage of fmi3InstanceEnvironment, fmi3LogMessageCallback
     // and fmi3IntermediateUpdateCallback.
 
-    StartZenohSession();
     
+    StartZenohSession();
+   
     proto::fmi3InstantiateCoSimulationMessage input;
     proto::fmi3InstanceMessage output;
 
@@ -356,72 +364,40 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     return transformToFmi3Status(output.status());
 }
 
+DEFINE_FMI3_GET_VALUE_FUNCTION(Float32)
+DEFINE_FMI3_SET_VALUE_FUNCTION(Float32)
 
-DEFINE_FMI3_SET_FUNCTION(Float32, fmi3SetFloat32InputMessage, "fmi3SetFloat32")
-DEFINE_FMI3_GET_FUNCTION(Float32, fmi3GetFloat32InputMessage, fmi3GetFloat32OutputMessage, "fmi3GetFloat32")
+DEFINE_FMI3_GET_VALUE_FUNCTION(Float64)
+DEFINE_FMI3_SET_VALUE_FUNCTION(Float64)
 
+DEFINE_FMI3_GET_VALUE_FUNCTION(Int8)
+DEFINE_FMI3_SET_VALUE_FUNCTION(Int8)
 
-DEFINE_FMI3_SET_FUNCTION(Float64, fmi3SetFloat64InputMessage, "fmi3SetFloat64")
-DEFINE_FMI3_GET_FUNCTION(Float64, fmi3GetFloat64InputMessage, fmi3GetFloat64OutputMessage, "fmi3GetFloat64")
+DEFINE_FMI3_GET_VALUE_FUNCTION(UInt8)
+DEFINE_FMI3_SET_VALUE_FUNCTION(UInt8)
 
+DEFINE_FMI3_GET_VALUE_FUNCTION(Int16)
+DEFINE_FMI3_SET_VALUE_FUNCTION(Int16)
 
-DEFINE_FMI3_SET_FUNCTION(Int8, fmi3SetInt8InputMessage, "fmi3SetInt8")
-DEFINE_FMI3_GET_FUNCTION(Int8, fmi3GetInt8InputMessage, fmi3GetInt8OutputMessage, "fmi3GetInt8")
+DEFINE_FMI3_GET_VALUE_FUNCTION(UInt16)
+DEFINE_FMI3_SET_VALUE_FUNCTION(UInt16)
 
-DEFINE_FMI3_SET_FUNCTION(UInt8, fmi3SetUInt8InputMessage, "fmi3SetUInt8")
-DEFINE_FMI3_GET_FUNCTION(UInt8, fmi3GetUInt8InputMessage, fmi3GetUInt8OutputMessage, "fmi3GetUInt8")
+DEFINE_FMI3_GET_VALUE_FUNCTION(Int32)
+DEFINE_FMI3_SET_VALUE_FUNCTION(Int32)
 
+DEFINE_FMI3_GET_VALUE_FUNCTION(UInt32)
+DEFINE_FMI3_SET_VALUE_FUNCTION(UInt32)
 
-DEFINE_FMI3_SET_FUNCTION(Int16, fmi3SetInt16InputMessage, "fmi3SetInt16")
-DEFINE_FMI3_GET_FUNCTION(Int16, fmi3GetInt16InputMessage, fmi3GetInt16OutputMessage, "fmi3GetInt16")
+DEFINE_FMI3_GET_VALUE_FUNCTION(Int64)
+DEFINE_FMI3_SET_VALUE_FUNCTION(Int64)
 
-DEFINE_FMI3_SET_FUNCTION(UInt16, fmi3SetUInt16InputMessage, "fmi3SetUInt16")
-DEFINE_FMI3_GET_FUNCTION(UInt16, fmi3GetUInt16InputMessage, fmi3GetUInt16OutputMessage, "fmi3GetUInt16")
+DEFINE_FMI3_GET_VALUE_FUNCTION(UInt64)
+DEFINE_FMI3_SET_VALUE_FUNCTION(UInt64)
 
+DEFINE_FMI3_GET_VALUE_FUNCTION(Boolean)
+DEFINE_FMI3_SET_VALUE_FUNCTION(Boolean)
 
-DEFINE_FMI3_SET_FUNCTION(Int32, fmi3SetInt32InputMessage, "fmi3SetInt32")
-DEFINE_FMI3_GET_FUNCTION(Int32, fmi3GetInt32InputMessage, fmi3GetInt32OutputMessage, "fmi3GetInt32")
-
-DEFINE_FMI3_SET_FUNCTION(UInt32, fmi3SetUInt32InputMessage, "fmi3SetUInt32")
-DEFINE_FMI3_GET_FUNCTION(UInt32, fmi3GetUInt32InputMessage, fmi3GetUInt32OutputMessage, "fmi3GetUInt32")
-
-
-DEFINE_FMI3_SET_FUNCTION(Int64, fmi3SetInt64InputMessage, "fmi3SetInt64")
-DEFINE_FMI3_GET_FUNCTION(Int64, fmi3GetInt64InputMessage, fmi3GetInt64OutputMessage, "fmi3GetInt64")
-
-DEFINE_FMI3_SET_FUNCTION(UInt64, fmi3SetUInt64InputMessage, "fmi3SetUInt64")
-DEFINE_FMI3_GET_FUNCTION(UInt64, fmi3GetUInt64InputMessage, fmi3GetUInt64OutputMessage, "fmi3GetUInt64")
-
-
-DEFINE_FMI3_SET_FUNCTION(Boolean, fmi3SetBooleanInputMessage, "fmi3SetBoolean")
-DEFINE_FMI3_GET_FUNCTION(Boolean, fmi3GetBooleanInputMessage, fmi3GetBooleanOutputMessage, "fmi3GetBoolean")
-
-
-fmi3Status fmi3SetString(
-    fmi3Instance instance,
-    const fmi3ValueReference valueReferences[],
-    size_t nValueReferences,
-    const fmi3String values[],
-    size_t nValues) {
-    
-    proto::fmi3SetStringInputMessage input;
-    proto::fmi3StatusMessage output;
-
-    SET_INSTANCE(input, instance) 
-    for (int i = 0; i < nValueReferences; ++i) {
-        input.add_value_references(valueReferences[i]); 
-    }
-    input.set_n_value_references(nValueReferences);
-    for (int i = 0; i < nValues; ++i) {
-        input.add_values(values[i]); 
-    }
-    input.set_n_values(nValues);
-    
-    QUERY("fmi3SetString", input, output, responderId)
-
-    return transformToFmi3Status(output.status());
-}
-
+DEFINE_FMI3_SET_VALUE_FUNCTION(String)
 fmi3Status fmi3GetString(
     fmi3Instance instance,
     const fmi3ValueReference valueReferences[],
@@ -490,6 +466,70 @@ fmi3Status fmi3GetClock(
 
     for (int i = 0; i < output.n_values(); ++i) {
         values[i] = output.values(i); 
+    }
+   
+    return transformToFmi3Status(output.status());
+}
+
+
+fmi3Status fmi3SetBinary(
+    fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    const size_t valueSizes[],
+    const fmi3Binary values[],
+    size_t nValues) {
+    
+    proto::fmi3SetBinaryInputMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance) 
+    
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]);
+    }
+    input.set_n_value_references(nValueReferences);
+
+    size_t offset = 0;
+    for (size_t i = 0; i < nValues; ++i) {
+        std::string binaryValue(reinterpret_cast<const char*>(values + offset), valueSizes[i]);
+        input.add_values(binaryValue);
+        offset += valueSizes[i];
+    }
+    input.set_n_values(nValues);
+
+    QUERY("fmi3SetBinary", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
+}
+
+fmi3Status fmi3GetBinary(
+    fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    size_t valueSizes[],
+    fmi3Binary values[],
+    size_t nValues) {
+
+    proto::fmi3GetBinaryInputMessage input;
+    proto::fmi3GetBinaryOutputMessage output;
+
+    SET_INSTANCE(input, instance) 
+    
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]); 
+    }
+    input.set_n_value_references(nValueReferences);
+    
+    QUERY("fmi3GetBinary", input, output, responderId)
+
+    size_t offset = 0;
+    for (size_t i = 0; i < output.n_values(); ++i) {
+        const std::string& binaryValue = output.values(i);
+        size_t binarySize = binaryValue.size();
+        valueSizes[i] = binarySize;
+        std::memcpy(values + offset, binaryValue.data(), binarySize);
+        offset += binarySize;
     }
    
     return transformToFmi3Status(output.status());
