@@ -14,6 +14,8 @@
 
 // MACROS
 
+#define MAX_BINARY_SIZE 4096
+
 #define DECLARE_QUERYABLE(FMI3FUNCTION, RESPONDER_ID) \
     std::string expr_##FMI3FUNCTION = "rpc/" + RESPONDER_ID + "/" + std::string(#FMI3FUNCTION); \
     zenoh::KeyExpr keyexpr_##FMI3FUNCTION(expr_##FMI3FUNCTION); \
@@ -183,6 +185,8 @@ namespace fmu {
     fmi3GetStringTYPE* fmi3GetString;
     fmi3SetClockTYPE* fmi3SetClock;
     fmi3GetClockTYPE* fmi3GetClock;
+    fmi3SetBinaryTYPE* fmi3SetBinary;
+    fmi3GetBinaryTYPE* fmi3GetBinary;
     fmi3ResetTYPE* fmi3Reset;
     fmi3TerminateTYPE* fmi3Terminate;
 } 
@@ -478,6 +482,77 @@ namespace callbacks {
     }
 
 
+
+    void fmi3SetBinary(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3SetBinaryInputMessage input;
+        
+        PARSE_QUERY(query, input)
+
+        size_t nValueReferences = input.n_value_references();
+        fmi3ValueReference value_references[nValueReferences];
+        size_t value_sizes[nValueReferences];
+        std::vector<uint8_t> values;
+
+        size_t offset = 0;
+        for (size_t i = 0; i < nValueReferences; ++i) {
+            value_references[i] = input.value_references()[i];
+            const std::string& binaryValue = input.values(i);
+            value_sizes[i] = binaryValue.size();
+            values.insert(values.end(), binaryValue.begin(), binaryValue.end());
+        }
+
+        fmi3Status status = fmu::fmi3SetBinary(
+            getInstance(input.instance_index()),
+            value_references,
+            input.n_value_references(),
+            value_sizes,
+            reinterpret_cast<const fmi3Binary*>(values.data()),
+            values.size()        
+        );
+        
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
+        SERIALIZE_REPLY(query, output)
+    }
+
+    void fmi3GetBinary(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3GetBinaryInputMessage input;
+        PARSE_QUERY(query, input)
+
+        size_t nValueReferences = input.n_value_references();
+        fmi3ValueReference value_references[nValueReferences];
+        size_t value_sizes[nValueReferences];
+        fmi3Binary values[nValueReferences * MAX_BINARY_SIZE]; // Assuming MAX_BINARY_SIZE is defined
+        size_t n_value;
+
+        for (size_t i = 0; i < nValueReferences; ++i) {
+            value_references[i] = input.value_references()[i];
+        }
+
+        fmi3Status status = fmu::fmi3GetBinary(
+            getInstance(input.instance_index()),
+            value_references,
+            nValueReferences,
+            value_sizes,
+            values,
+            n_value
+        );
+
+        proto::fmi3GetBinaryOutputMessage output;
+        size_t offset = 0;
+        for (size_t i = 0; i < nValueReferences; ++i) {
+            std::string binaryValue(reinterpret_cast<const char*>(values + offset), value_sizes[i]);
+            output.add_values(binaryValue);
+            offset += value_sizes[i];
+        }
+        output.set_status(transformToProtoStatus(status));
+
+        SERIALIZE_REPLY(query, output)
+    }
+
     
     void fmi3Reset(const zenoh::Query& query) {
         printQuery(query);
@@ -599,6 +674,8 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     DECLARE_QUERYABLE(fmi3GetString, responderId)
     DECLARE_QUERYABLE(fmi3SetClock, responderId)
     DECLARE_QUERYABLE(fmi3GetClock, responderId)
+    DECLARE_QUERYABLE(fmi3SetBinary, responderId)
+    DECLARE_QUERYABLE(fmi3GetBinary, responderId)
     DECLARE_QUERYABLE(fmi3Reset, responderId)
     DECLARE_QUERYABLE(fmi3Terminate, responderId)
 
@@ -679,7 +756,7 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
     // Add the responderId.txt fiel to the FMU at the base directory
     std::string responderIdPath = createResponderIdFile(tempPath, responderId);
     if (!addFileToZip(fmu, responderIdPath, "binaries/responderId")) {
-        std::cerr << "Error copyng the responderId file to FMU." << std::endl;
+        std::cerr << "Error copying the responderId file to FMU." << std::endl;
         zip_discard(fmu);
         return;
     }
