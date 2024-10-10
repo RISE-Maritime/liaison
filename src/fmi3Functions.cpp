@@ -135,11 +135,63 @@ void StartZenohSession() {
     }
 }
 
+// Get and Set functions
+
+#define DEFINE_FMI3_SET_FUNCTION(TYPE, INPUT_MESSAGE, QUERY_NAME) \
+fmi3Status fmi3Set##TYPE( \
+    fmi3Instance instance, \
+    const fmi3ValueReference valueReferences[], \
+    size_t nValueReferences, \
+    const fmi3##TYPE values[], \
+    size_t nValues) { \
+    proto::INPUT_MESSAGE input; \
+    proto::fmi3StatusMessage output; \
+    SET_INSTANCE(input, instance); \
+    for (size_t i = 0; i < nValueReferences; ++i) { \
+        input.add_value_references(valueReferences[i]); \
+    } \
+    input.set_n_value_references(nValueReferences); \
+    for (size_t i = 0; i < nValues; ++i) { \
+        input.add_values(values[i]); \
+    } \
+    input.set_n_values(nValues); \
+    QUERY(QUERY_NAME, input, output, responderId); \
+    return transformToFmi3Status(output.status()); \
+}
+
+#define DEFINE_FMI3_GET_FUNCTION(TYPE, INPUT_MESSAGE, OUTPUT_MESSAGE, QUERY_NAME) \
+fmi3Status fmi3Get##TYPE( \
+    fmi3Instance instance, \
+    const fmi3ValueReference valueReferences[], \
+    size_t nValueReferences, \
+    fmi3##TYPE values[], \
+    size_t nValues) { \
+    proto::INPUT_MESSAGE input; \
+    proto::OUTPUT_MESSAGE output; \
+    SET_INSTANCE(input, instance); \
+    for (size_t i = 0; i < nValueReferences; ++i) { \
+        input.add_value_references(valueReferences[i]); \
+    } \
+    input.set_n_value_references(nValueReferences); \
+    QUERY(QUERY_NAME, input, output, responderId); \
+    for (size_t i = 0; i < output.values_size(); ++i) { \
+        values[i] = output.values(i); \
+    } \
+    nValues = output.values_size(); \
+    return transformToFmi3Status(output.status()); \
+}
+
+
+
+
+
 extern "C" {
 
 const char* fmi3GetVersion() {
     return "3.0";
 }
+
+
 
 
 fmi3Instance fmi3InstantiateCoSimulation(
@@ -304,40 +356,55 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     return transformToFmi3Status(output.status());
 }
 
-fmi3Status fmi3GetFloat32(
+
+DEFINE_FMI3_SET_FUNCTION(Float32, fmi3SetFloat32InputMessage, "fmi3SetFloat32")
+DEFINE_FMI3_GET_FUNCTION(Float32, fmi3GetFloat32InputMessage, fmi3GetFloat32OutputMessage, "fmi3GetFloat32")
+
+
+DEFINE_FMI3_SET_FUNCTION(Float64, fmi3SetFloat64InputMessage, "fmi3SetFloat64")
+DEFINE_FMI3_GET_FUNCTION(Float64, fmi3GetFloat64InputMessage, fmi3GetFloat64OutputMessage, "fmi3GetFloat64")
+
+
+DEFINE_FMI3_SET_FUNCTION(Int8, fmi3SetInt8InputMessage, "fmi3SetInt8")
+DEFINE_FMI3_GET_FUNCTION(Int8, fmi3GetInt8InputMessage, fmi3GetInt8OutputMessage, "fmi3GetInt8")
+
+DEFINE_FMI3_SET_FUNCTION(UInt8, fmi3SetUInt8InputMessage, "fmi3SetUInt8")
+DEFINE_FMI3_GET_FUNCTION(UInt8, fmi3GetUInt8InputMessage, fmi3GetUInt8OutputMessage, "fmi3GetUInt8")
+
+
+DEFINE_FMI3_SET_FUNCTION(Int16, fmi3SetInt16InputMessage, "fmi3SetInt16")
+DEFINE_FMI3_GET_FUNCTION(Int16, fmi3GetInt16InputMessage, fmi3GetInt16OutputMessage, "fmi3GetInt16")
+
+DEFINE_FMI3_SET_FUNCTION(UInt16, fmi3SetUInt16InputMessage, "fmi3SetUInt16")
+DEFINE_FMI3_GET_FUNCTION(UInt16, fmi3GetUInt16InputMessage, fmi3GetUInt16OutputMessage, "fmi3GetUInt16")
+
+
+DEFINE_FMI3_SET_FUNCTION(Int32, fmi3SetInt32InputMessage, "fmi3SetInt32")
+DEFINE_FMI3_GET_FUNCTION(Int32, fmi3GetInt32InputMessage, fmi3GetInt32OutputMessage, "fmi3GetInt32")
+
+DEFINE_FMI3_SET_FUNCTION(UInt32, fmi3SetUInt32InputMessage, "fmi3SetUInt32")
+DEFINE_FMI3_GET_FUNCTION(UInt32, fmi3GetUInt32InputMessage, fmi3GetUInt32OutputMessage, "fmi3GetUInt32")
+
+
+DEFINE_FMI3_SET_FUNCTION(Int64, fmi3SetInt64InputMessage, "fmi3SetInt64")
+DEFINE_FMI3_GET_FUNCTION(Int64, fmi3GetInt64InputMessage, fmi3GetInt64OutputMessage, "fmi3GetInt64")
+
+DEFINE_FMI3_SET_FUNCTION(UInt64, fmi3SetUInt64InputMessage, "fmi3SetUInt64")
+DEFINE_FMI3_GET_FUNCTION(UInt64, fmi3GetUInt64InputMessage, fmi3GetUInt64OutputMessage, "fmi3GetUInt64")
+
+
+DEFINE_FMI3_SET_FUNCTION(Boolean, fmi3SetBooleanInputMessage, "fmi3SetBoolean")
+DEFINE_FMI3_GET_FUNCTION(Boolean, fmi3GetBooleanInputMessage, fmi3GetBooleanOutputMessage, "fmi3GetBoolean")
+
+
+fmi3Status fmi3SetString(
     fmi3Instance instance,
     const fmi3ValueReference valueReferences[],
     size_t nValueReferences,
-    fmi3Float32 values[],
+    const fmi3String values[],
     size_t nValues) {
     
-    proto::fmi3GetFloat32InputMessage input;
-    proto::fmi3GetFloat32OutputMessage output;
-
-    SET_INSTANCE(input, instance) 
-    for (int i = 0; i < nValueReferences; ++i) {
-        input.add_value_references(valueReferences[i]); 
-    }
-    input.set_n_value_references(nValueReferences);
-    
-    QUERY("fmi3GetFloat32", input, output, responderId)
-
-    for (int i = 0; i < output.n_values(); ++i) {
-        values[i] = output.values()[i]; 
-    }
-    nValues = output.n_values();
-    
-    return transformToFmi3Status(output.status());
-}
-
-fmi3Status fmi3SetFloat64(
-    fmi3Instance instance,
-    const fmi3ValueReference valueReferences[],
-    size_t nValueReferences,
-    const fmi3Float64 values[],
-    size_t nValues) {
-    
-    proto::fmi3SetFloat64InputMessage input;
+    proto::fmi3SetStringInputMessage input;
     proto::fmi3StatusMessage output;
 
     SET_INSTANCE(input, instance) 
@@ -350,20 +417,20 @@ fmi3Status fmi3SetFloat64(
     }
     input.set_n_values(nValues);
     
-    QUERY("fmi3SetFloat64", input, output, responderId)
+    QUERY("fmi3SetString", input, output, responderId)
 
     return transformToFmi3Status(output.status());
 }
 
-fmi3Status fmi3GetFloat64(
+fmi3Status fmi3GetString(
     fmi3Instance instance,
     const fmi3ValueReference valueReferences[],
     size_t nValueReferences,
-    fmi3Float64 values[],
+    fmi3String values[],
     size_t nValues) {
     
-    proto::fmi3GetFloat64InputMessage input;
-    proto::fmi3GetFloat64OutputMessage output;
+    proto::fmi3GetStringInputMessage input;
+    proto::fmi3GetStringOutputMessage output;
 
     SET_INSTANCE(input, instance) 
     for (int i = 0; i < nValueReferences; ++i) {
@@ -371,13 +438,60 @@ fmi3Status fmi3GetFloat64(
     }
     input.set_n_value_references(nValueReferences);
     
-    QUERY("fmi3GetFloat64", input, output, responderId)
+    QUERY("fmi3GetString", input, output, responderId)
 
     for (int i = 0; i < output.n_values(); ++i) {
-        values[i] = output.values()[i]; 
+        values[i] = output.values(i).c_str(); 
     }
     nValues = output.n_values();
     
+    return transformToFmi3Status(output.status());
+}
+
+fmi3Status fmi3SetClock(
+    fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    const fmi3Clock values[]) {
+    
+    proto::fmi3SetClockInputMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance) 
+    
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]);
+        input.add_values(values[i]); 
+    }
+    input.set_n_value_references(nValueReferences);
+        
+    QUERY("fmi3SetClock", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
+}
+
+fmi3Status fmi3GetClock(
+    fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    fmi3Clock values[]) {
+
+    proto::fmi3GetClockInputMessage input;
+    proto::fmi3GetClockOutputMessage output;
+
+    SET_INSTANCE(input, instance) 
+    
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]); 
+    }
+    input.set_n_value_references(nValueReferences);
+    
+    QUERY("fmi3GetClock", input, output, responderId)
+
+    for (int i = 0; i < output.n_values(); ++i) {
+        values[i] = output.values(i); 
+    }
+   
     return transformToFmi3Status(output.status());
 }
 

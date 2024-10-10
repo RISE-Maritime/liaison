@@ -339,7 +339,6 @@ message fmi3SetClockInputMessage {
   repeated int32 value_references = 2;  
   int32 n_value_references = 3;
   repeated bool values = 4;
-  int32 n_values = 5;
 }
 
 message fmi3GetClockInputMessage {
