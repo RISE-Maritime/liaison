@@ -732,7 +732,7 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
     int error = 0;
     zip_t* fmu = zip_open(outputFmuPath.c_str(), ZIP_CREATE | ZIP_TRUNCATE, &error);
     if (!fmu) {
-        std::cerr << "Failed to create FMU at: " << outputFmuPath << std::endl;
+        std::cerr << "Failed to create FMU at: " << outputFmuPath << " Error: " << zip_strerror(fmu) << std::endl;
         return;
     }
 
@@ -753,7 +753,7 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
         return;
     }
 
-    // Add the responderId.txt fiel to the FMU at the base directory
+    // Add the responderId.txt field to the FMU at the base directory
     std::string responderIdPath = createResponderIdFile(tempPath, responderId);
     if (!addFileToZip(fmu, responderIdPath, "binaries/responderId")) {
         std::cerr << "Error copying the responderId file to FMU." << std::endl;
@@ -763,7 +763,7 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
 
     // Close the zip archive
     if (zip_close(fmu) < 0) {
-        std::cerr << "Failed to finalize FMU zip archive" << std::endl;
+        std::cerr << "Failed to finalize FMU zip archive: " << zip_strerror(fmu) << std::endl;
         return;
     }
 
