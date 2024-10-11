@@ -11,9 +11,8 @@
 
 // MACROS
 
-
 #define TRY_CODE(FUNCTION_CALL, ERROR_MSG, ERROR_RETURN) \
-    try {                                                          \
+    try {                                                        \
         FUNCTION_CALL                                             \
     } catch (const std::exception &e) {                            \
         std::cerr << ERROR_MSG << e.what() << std::endl;           \
@@ -24,7 +23,8 @@
     Placeholder* placeholder = reinterpret_cast<Placeholder*>(INSTANCE); \
     INPUT.set_instance_index(placeholder->instance_index);  \
 
-
+#define NOT_IMPLEMENTED \
+    return fmi3Error; \
 
 #define DEFINE_FMI3_SET_VALUE_FUNCTION(TYPE) \
 fmi3Status fmi3Set##TYPE( \
@@ -92,7 +92,6 @@ fmi3Status fmi3Get##TYPE( \
 
 
 std::unique_ptr<zenoh::Session> session;
-
 
 
 class Placeholder {
@@ -188,17 +187,77 @@ void StartZenohSession() {
     }
 }
 
+/***************************************************
+ 
+                FMI3 Functions
 
-
-
+****************************************************/
 
 extern "C" {
+
+/***************************************************
+Types for Common Functions
+****************************************************/    
+
+/* Inquire version numbers and set debug logging */
 
 const char* fmi3GetVersion() {
     return "3.0";
 }
 
 
+fmi3Status fmi3SetDebugLogging(
+    fmi3Instance instance,
+    fmi3Boolean loggingOn,
+    size_t nCategories,
+    const fmi3String categories[]) {
+
+    proto::fmi3SetDebugLoggingMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+    input.set_logging_on(loggingOn);
+    input.set_n_categories(nCategories);
+    for (int i = 0; i < nCategories; ++i) {
+        input.add_categories(categories[i]); 
+    }
+    
+    QUERY("fmi3SetDebugLogging", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
+}
+
+
+
+/* Creation and destruction of FMU instances */
+
+fmi3Instance fmi3InstantiateModelExchange(
+    fmi3String                     instanceName,
+    fmi3String                     instantiationToken,
+    fmi3String                     resourcePath,
+    fmi3Boolean                    visible,
+    fmi3Boolean                    loggingOn,
+    fmi3InstanceEnvironment        instanceEnvironment,
+    fmi3LogMessageCallback         logMessage) {
+
+    StartZenohSession();
+    
+    proto::fmi3InstantiateModelExchangeMessage input;
+    proto::fmi3InstanceMessage output;
+
+    input.set_instance_name(instanceName);
+    input.set_instantiation_token(instantiationToken);
+    input.set_resource_path(resourcePath);
+    input.set_visible(visible);
+    input.set_logging_on(loggingOn);
+
+    QUERY("fmi3InstantiateModelExchange", input, output, responderId)
+
+    std::cout << "Instance: " << output.instance_index() << std::endl;
+
+    Placeholder* placeholder = new Placeholder(output.instance_index());
+    return reinterpret_cast<fmi3Instance>(placeholder);
+}
 
 
 fmi3Instance fmi3InstantiateCoSimulation(
@@ -243,33 +302,6 @@ fmi3Instance fmi3InstantiateCoSimulation(
     return reinterpret_cast<fmi3Instance>(placeholder);
 }
 
-fmi3Instance fmi3InstantiateModelExchange(
-    fmi3String                     instanceName,
-    fmi3String                     instantiationToken,
-    fmi3String                     resourcePath,
-    fmi3Boolean                    visible,
-    fmi3Boolean                    loggingOn,
-    fmi3InstanceEnvironment        instanceEnvironment,
-    fmi3LogMessageCallback         logMessage) {
-
-    StartZenohSession();
-    
-    proto::fmi3InstantiateModelExchangeMessage input;
-    proto::fmi3InstanceMessage output;
-
-    input.set_instance_name(instanceName);
-    input.set_instantiation_token(instantiationToken);
-    input.set_resource_path(resourcePath);
-    input.set_visible(visible);
-    input.set_logging_on(loggingOn);
-
-    QUERY("fmi3InstantiateModelExchange", input, output, responderId)
-
-    std::cout << "Instance: " << output.instance_index() << std::endl;
-
-    Placeholder* placeholder = new Placeholder(output.instance_index());
-    return reinterpret_cast<fmi3Instance>(placeholder);
-}
 
 fmi3Instance fmi3InstantiateScheduledExecution(
     fmi3String                     instanceName,
@@ -303,17 +335,19 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     return reinterpret_cast<fmi3Instance>(placeholder);
 }
 
-fmi3Status fmi3EnterEventMode(fmi3Instance instance) {
+void fmi3FreeInstance(fmi3Instance instance) {
+
     proto::fmi3InstanceMessage input;
-    proto::fmi3StatusMessage output;
+    proto::voidMessage output;
 
     SET_INSTANCE(input, instance)
 
-    QUERY("fmi3EnterEventMode", input, output, responderId)
+    QUERY("fmi3FreeInstance", input, output, responderId)
 
-    return transformToFmi3Status(output.status());
+    delete placeholder;
+
+    session.reset();
 }
-
 
 fmi3Status fmi3EnterInitializationMode(
     fmi3Instance instance,
@@ -338,31 +372,54 @@ fmi3Status fmi3EnterInitializationMode(
     return transformToFmi3Status(output.status());
 }
 
-fmi3Status fmi3DoStep(fmi3Instance instance,
-    fmi3Float64 currentCommunicationPoint,
-    fmi3Float64 communicationStepSize,
-    fmi3Boolean noSetFMUStatePriorToCurrentPoint,
-    fmi3Boolean* eventHandlingNeeded,
-    fmi3Boolean* terminateSimulation,
-    fmi3Boolean* earlyReturn,
-    fmi3Float64* lastSuccessfulTime) {
-
-    proto::fmi3DoStepMessage input;
+fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
+    
+    proto::fmi3InstanceMessage input;
     proto::fmi3StatusMessage output;
     
-    SET_INSTANCE(input, instance) 
-    input.set_current_communication_point(currentCommunicationPoint);
-    input.set_communication_step_size(communicationStepSize);
-    input.set_no_set_fmu_state_prior_to_current_point(noSetFMUStatePriorToCurrentPoint);
-    input.set_event_handling_needed(*eventHandlingNeeded);
-    input.set_terminate_simulation(*terminateSimulation);
-    input.set_early_return(*earlyReturn);
-    input.set_last_successful_time(*lastSuccessfulTime);
+    SET_INSTANCE(input, instance)
 
-    QUERY("fmi3DoStep", input, output, responderId)
-    
+    QUERY("fmi3ExitInitializationMode", input, output, responderId)
+
     return transformToFmi3Status(output.status());
 }
+
+
+fmi3Status fmi3EnterEventMode(fmi3Instance instance) {
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+
+    QUERY("fmi3EnterEventMode", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
+}
+
+fmi3Status fmi3Terminate(fmi3Instance instance) {
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+    
+    QUERY("fmi3Terminate", input, output, responderId)
+
+    return transformToFmi3Status(output.status());;
+}
+
+fmi3Status fmi3Reset(fmi3Instance instance) {
+    proto::fmi3InstanceMessage input;
+    proto::fmi3StatusMessage output;
+
+    SET_INSTANCE(input, instance)
+    
+    QUERY("fmi3Reset", input, output, responderId)
+
+    return transformToFmi3Status(output.status());
+}
+
+/* Getting and setting variable values */
+
 
 DEFINE_FMI3_GET_VALUE_FUNCTION(Float32)
 DEFINE_FMI3_SET_VALUE_FUNCTION(Float32)
@@ -423,54 +480,6 @@ fmi3Status fmi3GetString(
     
     return transformToFmi3Status(output.status());
 }
-
-fmi3Status fmi3SetClock(
-    fmi3Instance instance,
-    const fmi3ValueReference valueReferences[],
-    size_t nValueReferences,
-    const fmi3Clock values[]) {
-    
-    proto::fmi3SetClockInputMessage input;
-    proto::fmi3StatusMessage output;
-
-    SET_INSTANCE(input, instance) 
-    
-    for (int i = 0; i < nValueReferences; ++i) {
-        input.add_value_references(valueReferences[i]);
-        input.add_values(values[i]); 
-    }
-    input.set_n_value_references(nValueReferences);
-        
-    QUERY("fmi3SetClock", input, output, responderId)
-
-    return transformToFmi3Status(output.status());
-}
-
-fmi3Status fmi3GetClock(
-    fmi3Instance instance,
-    const fmi3ValueReference valueReferences[],
-    size_t nValueReferences,
-    fmi3Clock values[]) {
-
-    proto::fmi3GetClockInputMessage input;
-    proto::fmi3GetClockOutputMessage output;
-
-    SET_INSTANCE(input, instance) 
-    
-    for (int i = 0; i < nValueReferences; ++i) {
-        input.add_value_references(valueReferences[i]); 
-    }
-    input.set_n_value_references(nValueReferences);
-    
-    QUERY("fmi3GetClock", input, output, responderId)
-
-    for (int i = 0; i < output.n_values(); ++i) {
-        values[i] = output.values(i); 
-    }
-   
-    return transformToFmi3Status(output.status());
-}
-
 
 fmi3Status fmi3SetBinary(
     fmi3Instance instance,
@@ -535,75 +544,305 @@ fmi3Status fmi3GetBinary(
     return transformToFmi3Status(output.status());
 }
 
-
-fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
-    
-    proto::fmi3InstanceMessage input;
-    proto::fmi3StatusMessage output;
-    
-    SET_INSTANCE(input, instance)
-
-    QUERY("fmi3ExitInitializationMode", input, output, responderId)
-
-    return transformToFmi3Status(output.status());
-}
-
-
-void fmi3FreeInstance(fmi3Instance instance) {
-
-    proto::fmi3InstanceMessage input;
-    proto::voidMessage output;
-
-    SET_INSTANCE(input, instance)
-
-    QUERY("fmi3FreeInstance", input, output, responderId)
-
-    delete placeholder;
-
-    session.reset();
-}
-
-fmi3Status fmi3Reset(fmi3Instance instance) {
-    proto::fmi3InstanceMessage input;
-    proto::fmi3StatusMessage output;
-
-    SET_INSTANCE(input, instance)
-    
-    QUERY("fmi3Reset", input, output, responderId)
-
-    return transformToFmi3Status(output.status());
-}
-
-fmi3Status fmi3Terminate(fmi3Instance instance) {
-    proto::fmi3InstanceMessage input;
-    proto::fmi3StatusMessage output;
-
-    SET_INSTANCE(input, instance)
-    
-    QUERY("fmi3Terminate", input, output, responderId)
-
-    return transformToFmi3Status(output.status());;
-}
-
-fmi3Status fmi3SetDebugLogging(
+fmi3Status fmi3SetClock(
     fmi3Instance instance,
-    fmi3Boolean loggingOn,
-    size_t nCategories,
-    const fmi3String categories[]) {
-
-    proto::fmi3SetDebugLoggingMessage input;
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    const fmi3Clock values[]) {
+    
+    proto::fmi3SetClockInputMessage input;
     proto::fmi3StatusMessage output;
 
-    SET_INSTANCE(input, instance)
-    input.set_logging_on(loggingOn);
-    input.set_n_categories(nCategories);
-    for (int i = 0; i < nCategories; ++i) {
-        input.add_categories(categories[i]); 
-    }
+    SET_INSTANCE(input, instance) 
     
-    QUERY("fmi3SetDebugLogging", input, output, responderId)
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]);
+        input.add_values(values[i]); 
+    }
+    input.set_n_value_references(nValueReferences);
+        
+    QUERY("fmi3SetClock", input, output, responderId)
 
     return transformToFmi3Status(output.status());
 }
+
+fmi3Status fmi3GetClock(
+    fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    fmi3Clock values[]) {
+
+    proto::fmi3GetClockInputMessage input;
+    proto::fmi3GetClockOutputMessage output;
+
+    SET_INSTANCE(input, instance) 
+    
+    for (int i = 0; i < nValueReferences; ++i) {
+        input.add_value_references(valueReferences[i]); 
+    }
+    input.set_n_value_references(nValueReferences);
+    
+    QUERY("fmi3GetClock", input, output, responderId)
+
+    for (int i = 0; i < output.n_values(); ++i) {
+        values[i] = output.values(i); 
+    }
+   
+    return transformToFmi3Status(output.status());
 }
+
+/* Getting Variable Dependency Information */
+
+fmi3Status fmi3GetNumberOfVariableDependencies(
+    fmi3Instance instance,
+    fmi3ValueReference valueReference,
+    size_t* nDependencies) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetVariableDependencies(
+    fmi3Instance instance,
+    fmi3ValueReference dependent,
+    size_t elementIndicesOfDependent[],
+    fmi3ValueReference independents[],
+    size_t elementIndicesOfIndependents[],
+    fmi3DependencyKind dependencyKinds[],
+    size_t nDependencies) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetFMUState(fmi3Instance instance, fmi3FMUState* state) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3SetFMUState(fmi3Instance instance, fmi3FMUState state) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3FreeFMUState(fmi3Instance instance, fmi3FMUState* state) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3SerializedFMUStateSize(fmi3Instance instance, fmi3FMUState state, size_t* size) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3SerializeFMUState(fmi3Instance instance, fmi3FMUState state, fmi3Byte serializedState[], size_t size) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3DeserializeFMUState(fmi3Instance instance, const fmi3Byte serializedState[], size_t size, fmi3FMUState* state) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetDirectionalDerivative(
+    fmi3Instance instance,
+    const fmi3ValueReference unknowns[],
+    size_t nUnknowns,
+    const fmi3ValueReference knowns[],
+    size_t nKnowns,
+    const fmi3Float64 seed[],
+    size_t nSeed,
+    fmi3Float64 sensitivity[],
+    size_t nSensitivity) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetAdjointDerivative(
+    fmi3Instance instance,
+    const fmi3ValueReference unknowns[],
+    size_t nUnknowns,
+    const fmi3ValueReference knowns[],
+    size_t nKnowns,
+    const fmi3Float64 seed[],
+    size_t nSeed,
+    fmi3Float64 sensitivity[],
+    size_t nSensitivity) {
+    NOT_IMPLEMENTED
+}
+
+/* Entering and exiting the Configuration or Reconfiguration Mode */
+
+fmi3Status fmi3EnterConfigurationMode(fmi3Instance instance) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3ExitConfigurationMode(fmi3Instance instance) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetIntervalDecimal(fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    fmi3Float64 intervals[],
+    fmi3IntervalQualifier qualifiers[]) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetIntervalFraction(fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    fmi3UInt64 counters[],
+    fmi3UInt64 resolutions[],
+    fmi3IntervalQualifier qualifiers[]) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetShiftDecimal(fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    fmi3Float64 shifts[]) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetShiftFraction(fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    fmi3UInt64 counters[],
+    fmi3UInt64 resolutions[]) {
+    NOT_IMPLEMENTED
+}   
+
+fmi3Status fmi3SetIntervalDecimal(fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    const fmi3Float64 intervals[]) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3SetIntervalFraction(fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    const fmi3UInt64 counters[],
+    const fmi3UInt64 resolutions[]) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3SetShiftDecimal(fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    const fmi3Float64 shifts[]) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3SetShiftFraction(fmi3Instance instance,
+    const fmi3ValueReference valueReferences[],
+    size_t nValueReferences,
+    const fmi3UInt64 counters[],
+    const fmi3UInt64 resolutions[]) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3EvaluateDiscreteStates(fmi3Instance instance) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3UpdateDiscreteStates(
+    fmi3Instance instance,
+    fmi3Boolean* discreteStatesNeedUpdate,
+    fmi3Boolean* terminateSimulation,
+    fmi3Boolean* nominalsOfContinuousStatesChanged,
+    fmi3Boolean* valuesOfContinuousStatesChanged,
+    fmi3Boolean* nextEventTimeDefined,
+    fmi3Float64* nextEventTime) {
+    NOT_IMPLEMENTED
+}
+
+/***************************************************
+Types for Functions for Model Exchange
+****************************************************/
+
+fmi3Status fmi3EnterContinuousTimeMode(fmi3Instance instance) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3CompletedIntegratorStep(fmi3Instance instance,
+    fmi3Boolean  noSetFMUStatePriorToCurrentPoint,
+    fmi3Boolean* enterEventMode,
+    fmi3Boolean* terminateSimulation) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3SetTime(fmi3Instance instance, fmi3Float64 time) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3SetContinuousStates(fmi3Instance instance, const fmi3Float64 x[], size_t nx) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetContinuousStateDerivatives(fmi3Instance instance, fmi3Float64 derivatives[], size_t nx) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetEventIndicators(fmi3Instance instance, fmi3Float64 eventIndicators[], size_t ni) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetContinuousStates(fmi3Instance instance, fmi3Float64 x[], size_t nx) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetNominalsOfContinuousStates(fmi3Instance instance, fmi3Float64 x_nominal[], size_t nx) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetNumberOfEventIndicators(fmi3Instance instance, size_t* nz) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetNumberOfContinuousStates(fmi3Instance instance, size_t* nx) {
+    NOT_IMPLEMENTED
+}
+
+/***************************************************
+Types for Functions for Co-Simulation
+****************************************************/
+
+fmi3Status fmi3EnterStepMode(fmi3Instance instance) {
+    NOT_IMPLEMENTED
+}
+
+fmi3Status fmi3GetOutputDerivatives(fmi3Instance instance, const fmi3ValueReference valueReferences[], size_t nValueReferences, const fmi3Int32 orders[], fmi3Float64 values[], size_t nValues) {
+    NOT_IMPLEMENTED
+}
+
+
+fmi3Status fmi3DoStep(fmi3Instance instance,
+    fmi3Float64 currentCommunicationPoint,
+    fmi3Float64 communicationStepSize,
+    fmi3Boolean noSetFMUStatePriorToCurrentPoint,
+    fmi3Boolean* eventHandlingNeeded,
+    fmi3Boolean* terminateSimulation,
+    fmi3Boolean* earlyReturn,
+    fmi3Float64* lastSuccessfulTime) {
+
+    proto::fmi3DoStepMessage input;
+    proto::fmi3StatusMessage output;
+    
+    SET_INSTANCE(input, instance) 
+    input.set_current_communication_point(currentCommunicationPoint);
+    input.set_communication_step_size(communicationStepSize);
+    input.set_no_set_fmu_state_prior_to_current_point(noSetFMUStatePriorToCurrentPoint);
+    input.set_event_handling_needed(*eventHandlingNeeded);
+    input.set_terminate_simulation(*terminateSimulation);
+    input.set_early_return(*earlyReturn);
+    input.set_last_successful_time(*lastSuccessfulTime);
+
+    QUERY("fmi3DoStep", input, output, responderId)
+    
+    return transformToFmi3Status(output.status());
+}
+
+
+/***************************************************
+Types for Functions for Scheduled Execution
+****************************************************/
+
+fmi3Status fmi3ActivateModelPartition(fmi3Instance instance, fmi3ValueReference clockReference, fmi3Float64 activationTime) {
+    NOT_IMPLEMENTED
+}
+
+
+} // end of "extern C"
 
