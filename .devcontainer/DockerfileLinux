@@ -1,5 +1,5 @@
 # Use the official Ubuntu 22.04 LTS image
-FROM ubuntu:24.04
+FROM ubuntu:22.04
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -10,12 +10,15 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     wget \
-    libssl-dev \
     zlib1g-dev \
+    libbz2-dev \
+    liblzma-dev \
+    libzstd-dev \
+    libssl-dev \
     pkg-config \
     python3 \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+    python3-pip 
+RUN rm -rf /var/lib/apt/lists/*
 
 
 # Install Rust
@@ -56,15 +59,27 @@ RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PR
     ldconfig
 
 
-# Libzip 
-RUN apt-get update && apt-get install -y libzip-dev 
+# Download and build libzip from source
+ENV LIBZIP_VERSION=1.11.1
+RUN wget https://libzip.org/download/libzip-${LIBZIP_VERSION}.tar.gz && \
+    tar -xvf libzip-${LIBZIP_VERSION}.tar.gz && \
+    cd libzip-${LIBZIP_VERSION} && \
+    mkdir build && \
+    cd build && \
+    cmake .. \
+        -DBUILD_SHARED_LIBS=OFF \          
+        -DENABLE_GNUTLS=OFF \             
+        -DENABLE_MBEDTLS=OFF \             
+        -DENABLE_OPENSSL=OFF \              
+        -DENABLE_BZIP2=OFF \               
+        -DENABLE_LZMA=OFF \                
+        -DENABLE_ZSTD=OFF \                
+    && make -j$(nproc) \
+    && make install
+RUN rm -rf /libzip-${LIBZIP_VERSION} /libzip-${LIBZIP_VERSION}.tar.gz
 
 # Python and FMPy
-RUN apt-get update && apt-get install -y python3 python3-pip
-RUN python3 -m pip install --break-system-packages fmpy[complete]==0.3.20
-# RUN apt-get install pipx
-# RUN pipx install fmpy[complete]==0.3.20
-# RUN pipx ensurepath
+RUN python3 -m pip install fmpy[complete]==0.3.20
 
 # Set working directory back to /workspaces
 WORKDIR /workspaces
