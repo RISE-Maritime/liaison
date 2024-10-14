@@ -68,7 +68,7 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-c.git
           mkdir zenoh-c/build
           cd zenoh-c/build
-          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
+          cmake ../ -DBUILD_SHARED_LIBS=TRUE -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
           cmake --build . --config Release --target install
 
@@ -77,7 +77,7 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-cpp.git
           mkdir zenoh-cpp/build
           cd zenoh-cpp/build
-          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
+          cmake ../ -DBUILD_SHARED_LIBS=TRUE -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release --target install
 
       - name: Download and build Protobuf from source
