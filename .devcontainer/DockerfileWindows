@@ -1,5 +1,0 @@
-# Use the official Windows Server Core image
-FROM mcr.microsoft.com/windows/servercore:ltsc2019
-
-# Install Chocolatey package manager
-RUN powershell -Command "Set-ExecutionPolicy Bypass -Scope Process; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))"
