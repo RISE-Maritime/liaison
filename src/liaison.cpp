@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <zip.h>
+#include <iostream>
 
 #include "zenoh.hxx"
 #include "fmi3.pb.h"
@@ -13,25 +14,90 @@
 
 // MACROS
 
+#define MAX_BINARY_SIZE 4096
+
 #define DECLARE_QUERYABLE(FMI3FUNCTION, RESPONDER_ID) \
     std::string expr_##FMI3FUNCTION = "rpc/" + RESPONDER_ID + "/" + std::string(#FMI3FUNCTION); \
-    zenoh::KeyExprView keyexpr_##FMI3FUNCTION(expr_##FMI3FUNCTION); \
-    auto queryable_##FMI3FUNCTION = zenoh::expect<zenoh::Queryable>(z_server.declare_queryable(keyexpr_##FMI3FUNCTION,callbacks::FMI3FUNCTION));
+    zenoh::KeyExpr keyexpr_##FMI3FUNCTION(expr_##FMI3FUNCTION); \
+    auto on_drop_queryable_##FMI3FUNCTION = []() { std::cout << "Destroying queryable for " << #FMI3FUNCTION << "\n"; }; \
+    auto queryable_##FMI3FUNCTION = session.declare_queryable(keyexpr_##FMI3FUNCTION, std::function<void(const zenoh::Query&)>(callbacks::FMI3FUNCTION), on_drop_queryable_##FMI3FUNCTION); \
 
 #define PARSE_QUERY(QUERY, INPUT) \
-    auto query_value = QUERY.get_value(); \
-    INPUT.ParseFromArray(query_value.payload.start, query_value.payload.len); \
+    auto input_payload = QUERY.get_payload(); \
+    if (input_payload.has_value()) { \
+        const auto input_wire =  input_payload->get().as_vector(); \
+        INPUT.ParseFromArray(input_wire.data(), input_wire.size()); \
+    } \
 
 #define SERIALIZE_REPLY(QUERY, OUTPUT) \
-    size_t output_size = OUTPUT.ByteSizeLong(); \
-    std::vector<uint8_t> buffer(output_size); \
-    OUTPUT.SerializeToArray(buffer.data(), output_size); \
-    zenoh::QueryReplyOptions options; \
-    options.set_encoding(zenoh::Encoding(Z_ENCODING_PREFIX_APP_CUSTOM)); \
-    QUERY.reply(QUERY.get_keyexpr(), buffer); \
+    std::vector<uint8_t> output_wire(OUTPUT.ByteSizeLong()); \
+    OUTPUT.SerializeToArray(output_wire.data(), output_wire.size()); \
+    auto output_payload = zenoh::Bytes(std::move(output_wire)); \
+    QUERY.reply(QUERY.get_keyexpr(), std::move(output_payload)); \
+
 
 #define BIND_FMU_LIBRARY_FUNCTION(FMI3FUNCTION) \
     fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)dlsym(fmuLibrary, #FMI3FUNCTION);
+
+#define DEFINE_FMI3_GET_VALUE_FUNCTION(TYPE) \
+void fmi3Get##TYPE(const zenoh::Query& query) { \
+    printQuery(query); \
+\
+    proto::fmi3Get##TYPE##InputMessage input; \
+    PARSE_QUERY(query, input) \
+\
+    fmi3ValueReference value_references[input.n_value_references()]; \
+    for (int i = 0; i < input.n_value_references(); i++) { \
+        value_references[i] = input.value_references()[i]; \
+    } \
+    fmi3##TYPE values[input.n_value_references()]; \
+    size_t nValues = input.n_value_references(); \
+\
+    fmi3Status status = fmu::fmi3Get##TYPE( \
+        getInstance(input.instance_index()), \
+        value_references, \
+        input.n_value_references(), \
+        values, \
+        nValues \
+    ); \
+\
+    proto::fmi3Get##TYPE##OutputMessage output; \
+    for (int i = 0; i < input.n_value_references(); i++) { \
+        output.add_values(values[i]); \
+    } \
+    output.set_n_values(nValues); \
+    output.set_status(transformToProtoStatus(status)); \
+\
+    SERIALIZE_REPLY(query, output) \
+}
+
+#define DEFINE_FMI3_SET_VALUE_FUNCTION(TYPE) \
+void fmi3Set##TYPE(const zenoh::Query& query) { \
+    printQuery(query); \
+\
+    proto::fmi3Set##TYPE##InputMessage input; \
+    PARSE_QUERY(query, input); \
+\
+    fmi3ValueReference value_references[input.n_value_references()]; \
+    for (int i = 0; i < input.n_value_references(); i++) { \
+        value_references[i] = input.value_references()[i]; \
+    } \
+    fmi3##TYPE values[input.n_value_references()]; \
+    for (int i = 0; i < input.n_value_references(); i++) { \
+        values[i] = input.values()[i]; \
+    } \
+\
+    fmi3Status status = fmu::fmi3Set##TYPE( \
+        getInstance(input.instance_index()), \
+        value_references, \
+        input.n_value_references(), \
+        values, \
+        input.n_values() \
+    ); \
+\
+    proto::fmi3StatusMessage output = makeFmi3StatusMessage(status); \
+    SERIALIZE_REPLY(query, output) \
+}
 
 // end of MACROS
 
@@ -86,13 +152,45 @@ proto::fmi3StatusMessage makeFmi3StatusMessage(fmi3Status status) {
 
 namespace fmu {
     fmi3InstantiateCoSimulationTYPE* fmi3InstantiateCoSimulation;
+    fmi3InstantiateModelExchangeTYPE* fmi3InstantiateModelExchange;
+    fmi3InstantiateScheduledExecutionTYPE* fmi3InstantiateScheduledExecution;
+    fmi3EnterEventModeTYPE* fmi3EnterEventMode;
     fmi3EnterInitializationModeTYPE* fmi3EnterInitializationMode;
     fmi3ExitInitializationModeTYPE* fmi3ExitInitializationMode;
     fmi3FreeInstanceTYPE* fmi3FreeInstance;
     fmi3DoStepTYPE* fmi3DoStep;
+    fmi3SetFloat32TYPE* fmi3SetFloat32;
+    fmi3GetFloat32TYPE* fmi3GetFloat32;
+    fmi3SetFloat64TYPE* fmi3SetFloat64;
     fmi3GetFloat64TYPE* fmi3GetFloat64;
+    fmi3SetInt8TYPE* fmi3SetInt8;
+    fmi3GetInt8TYPE* fmi3GetInt8;
+    fmi3SetUInt8TYPE* fmi3SetUInt8;
+    fmi3GetUInt8TYPE* fmi3GetUInt8;
+    fmi3SetInt16TYPE* fmi3SetInt16;
+    fmi3GetInt16TYPE* fmi3GetInt16;
+    fmi3SetUInt16TYPE* fmi3SetUInt16;
+    fmi3GetUInt16TYPE* fmi3GetUInt16;
+    fmi3SetInt32TYPE* fmi3SetInt32;
+    fmi3GetInt32TYPE* fmi3GetInt32;
+    fmi3SetUInt32TYPE* fmi3SetUInt32;
+    fmi3GetUInt32TYPE* fmi3GetUInt32;
+    fmi3SetInt64TYPE* fmi3SetInt64;
+    fmi3GetInt64TYPE* fmi3GetInt64;
+    fmi3SetUInt64TYPE* fmi3SetUInt64;
+    fmi3GetUInt64TYPE* fmi3GetUInt64;
+    fmi3SetBooleanTYPE* fmi3SetBoolean;
+    fmi3GetBooleanTYPE* fmi3GetBoolean;
+    fmi3SetStringTYPE* fmi3SetString;
+    fmi3GetStringTYPE* fmi3GetString;
+    fmi3SetClockTYPE* fmi3SetClock;
+    fmi3GetClockTYPE* fmi3GetClock;
+    fmi3SetBinaryTYPE* fmi3SetBinary;
+    fmi3GetBinaryTYPE* fmi3GetBinary;
+    fmi3ResetTYPE* fmi3Reset;
     fmi3TerminateTYPE* fmi3Terminate;
 } 
+
 
 namespace callbacks {
 
@@ -124,6 +222,66 @@ namespace callbacks {
         instances[nextIndex] = instance;
         
         output.set_instance_index(nextIndex);
+        SERIALIZE_REPLY(query, output)
+    }
+
+    void fmi3InstantiateModelExchange(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3InstantiateModelExchangeMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3Instance instance = fmu::fmi3InstantiateModelExchange(
+            input.instance_name().c_str(),
+            input.instantiation_token().c_str(),
+            nullptr,
+            input.visible(),
+            input.logging_on(),
+            nullptr,
+            fmi3LogMessage
+        );
+
+        proto::fmi3InstanceMessage output;
+        instances[nextIndex] = instance;
+        
+        output.set_instance_index(nextIndex);
+        SERIALIZE_REPLY(query, output)
+
+    }
+    
+    void fmi3InstantiateScheduledExecution(const zenoh::Query& query) {
+        printQuery(query);
+        proto::fmi3InstantiateScheduledExecutionMessage input;
+        PARSE_QUERY(query, input)
+        fmi3Instance instance = fmu::fmi3InstantiateScheduledExecution(
+            input.instance_name().c_str(),
+            input.instantiation_token().c_str(),
+            nullptr,
+            input.visible(),
+            input.logging_on(),
+            nullptr,
+            fmi3LogMessage,
+            nullptr,
+            nullptr,
+            nullptr
+        );
+
+        proto::fmi3InstanceMessage output;
+        instances[nextIndex] = instance;
+        
+        output.set_instance_index(nextIndex);
+        SERIALIZE_REPLY(query, output)
+    }
+
+    void fmi3EnterEventMode(const zenoh::Query& query) {
+        printQuery(query);
+        
+        proto::fmi3InstanceMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3Status status = fmu::fmi3EnterEventMode(getInstance(input.instance_index()));
+
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
         SERIALIZE_REPLY(query, output)
     }
 
@@ -207,36 +365,207 @@ namespace callbacks {
         SERIALIZE_REPLY(query, output)
     }
 
-    void fmi3GetFloat64(const zenoh::Query& query) {
+    DEFINE_FMI3_GET_VALUE_FUNCTION(Float32)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(Float32)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(Float64)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(Float64)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(Int8)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(Int8)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(UInt8)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(UInt8)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(Int16)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(Int16)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(UInt16)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(UInt16)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(Int32)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(Int32)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(UInt32)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(UInt32)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(Int64)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(Int64)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(UInt64)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(UInt64)
+
+    DEFINE_FMI3_GET_VALUE_FUNCTION(Boolean)
+    DEFINE_FMI3_SET_VALUE_FUNCTION(Boolean)
+
+    void fmi3SetString(const zenoh::Query& query) {
         printQuery(query);
 
-        proto::fmi3GetFloat64InputMessage input;
+        proto::fmi3SetStringInputMessage input;
+        
         PARSE_QUERY(query, input)
 
         fmi3ValueReference value_references[input.n_value_references()];
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
         }
-        fmi3Float64 values[input.n_value_references()];
-        size_t nValues = input.n_value_references();
+        fmi3String values[input.n_value_references()];
+        for (int i = 0; i < input.n_value_references(); i++) {
+            values[i] = input.values()[i].c_str();
+        }
 
-        fmi3Status status = fmu::fmi3GetFloat64(
+        fmi3Status status = fmu::fmi3SetString(
             getInstance(input.instance_index()),
             value_references,
             input.n_value_references(),
             values,
-            nValues
+            input.n_values()
+        );
+        
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
+        SERIALIZE_REPLY(query, output)
+    }
+    DEFINE_FMI3_GET_VALUE_FUNCTION(String)
+
+    void fmi3SetClock(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3SetClockInputMessage input;
+        
+        PARSE_QUERY(query, input)
+
+        fmi3ValueReference value_references[input.n_value_references()];
+        fmi3Clock values[input.n_value_references()];
+        for (int i = 0; i < input.n_value_references(); i++) {
+            value_references[i] = input.value_references()[i];
+            values[i] = input.values()[i];
+        }
+        
+        fmi3Status status = fmu::fmi3SetClock(
+            getInstance(input.instance_index()),
+            value_references,
+            input.n_value_references(),
+            values        
+        );
+        
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
+        SERIALIZE_REPLY(query, output)
+    }
+
+    void fmi3GetClock(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3GetClockInputMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3ValueReference value_references[input.n_value_references()];
+        for (int i = 0; i < input.n_value_references(); i++) {
+            value_references[i] = input.value_references()[i];
+        }
+        fmi3Clock values[input.n_value_references()];
+        size_t nValues = input.n_value_references();
+
+        fmi3Status status = fmu::fmi3GetClock(
+            getInstance(input.instance_index()),
+            value_references,
+            input.n_value_references(),
+            values
         );
 
-        proto::fmi3GetFloat64OutputMessage output;
+        proto::fmi3GetClockOutputMessage output;
         for (int i = 0; i < input.n_value_references(); i++) {
             output.add_values(values[i]);
         }
-        output.set_n_values(nValues);
         output.set_status(transformToProtoStatus(status));
 
         SERIALIZE_REPLY(query, output)
     }
+
+
+
+    void fmi3SetBinary(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3SetBinaryInputMessage input;
+        
+        PARSE_QUERY(query, input)
+
+        size_t nValueReferences = input.n_value_references();
+        fmi3ValueReference value_references[nValueReferences];
+        size_t value_sizes[nValueReferences];
+        std::vector<uint8_t> values;
+
+        size_t offset = 0;
+        for (size_t i = 0; i < nValueReferences; ++i) {
+            value_references[i] = input.value_references()[i];
+            const std::string& binaryValue = input.values(i);
+            value_sizes[i] = binaryValue.size();
+            values.insert(values.end(), binaryValue.begin(), binaryValue.end());
+        }
+
+        fmi3Status status = fmu::fmi3SetBinary(
+            getInstance(input.instance_index()),
+            value_references,
+            input.n_value_references(),
+            value_sizes,
+            reinterpret_cast<const fmi3Binary*>(values.data()),
+            values.size()        
+        );
+        
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
+        SERIALIZE_REPLY(query, output)
+    }
+
+    void fmi3GetBinary(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3GetBinaryInputMessage input;
+        PARSE_QUERY(query, input)
+
+        size_t nValueReferences = input.n_value_references();
+        fmi3ValueReference value_references[nValueReferences];
+        size_t value_sizes[nValueReferences];
+        fmi3Binary values[nValueReferences * MAX_BINARY_SIZE]; // Assuming MAX_BINARY_SIZE is defined
+        size_t n_value;
+
+        for (size_t i = 0; i < nValueReferences; ++i) {
+            value_references[i] = input.value_references()[i];
+        }
+
+        fmi3Status status = fmu::fmi3GetBinary(
+            getInstance(input.instance_index()),
+            value_references,
+            nValueReferences,
+            value_sizes,
+            values,
+            n_value
+        );
+
+        proto::fmi3GetBinaryOutputMessage output;
+        size_t offset = 0;
+        for (size_t i = 0; i < nValueReferences; ++i) {
+            std::string binaryValue(reinterpret_cast<const char*>(values + offset), value_sizes[i]);
+            output.add_values(binaryValue);
+            offset += value_sizes[i];
+        }
+        output.set_status(transformToProtoStatus(status));
+
+        SERIALIZE_REPLY(query, output)
+    }
+
+    
+    void fmi3Reset(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3InstanceMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3Status status = fmu::fmi3Reset(getInstance(input.instance_index()));
+
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
+        SERIALIZE_REPLY(query, output)
+    }
+
 
     void fmi3Terminate(const zenoh::Query& query) {
         printQuery(query);
@@ -270,27 +599,87 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
 
     // Bind FMU library functions
     BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateCoSimulation)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateModelExchange)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateScheduledExecution)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3EnterEventMode)
     BIND_FMU_LIBRARY_FUNCTION(fmi3EnterInitializationMode)
     BIND_FMU_LIBRARY_FUNCTION(fmi3ExitInitializationMode)
     BIND_FMU_LIBRARY_FUNCTION(fmi3FreeInstance)
     BIND_FMU_LIBRARY_FUNCTION(fmi3DoStep)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetFloat32)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetFloat32)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetFloat64)
     BIND_FMU_LIBRARY_FUNCTION(fmi3GetFloat64)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetInt8)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetInt8)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetUInt8)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetUInt8)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetInt16)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetInt16)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetUInt16)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetUInt16)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetInt32)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetInt32)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetUInt32)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetUInt32)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetInt64)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetInt64)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetUInt64)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetUInt64)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetBoolean)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetBoolean)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetString)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetString)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetClock)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetClock)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3Reset)
     BIND_FMU_LIBRARY_FUNCTION(fmi3Terminate)
 
     // Start Zenoh Session
-    zenoh::Config config;
-    auto z_server = zenoh::expect<zenoh::Session>(zenoh::open(std::move(config)));
+    zenoh::Config config = zenoh::Config::create_default();
+    auto session = zenoh::Session::open(std::move(config));
 
     // Queryable declarations
     DECLARE_QUERYABLE(fmi3InstantiateCoSimulation, responderId)
+    DECLARE_QUERYABLE(fmi3InstantiateModelExchange, responderId)
+    DECLARE_QUERYABLE(fmi3InstantiateScheduledExecution, responderId)
+    DECLARE_QUERYABLE(fmi3EnterEventMode, responderId)
     DECLARE_QUERYABLE(fmi3EnterInitializationMode, responderId)
     DECLARE_QUERYABLE(fmi3ExitInitializationMode, responderId)
     DECLARE_QUERYABLE(fmi3FreeInstance, responderId)
     DECLARE_QUERYABLE(fmi3DoStep, responderId)
+    DECLARE_QUERYABLE(fmi3SetFloat32, responderId)
+    DECLARE_QUERYABLE(fmi3GetFloat32, responderId)
+    DECLARE_QUERYABLE(fmi3SetFloat64, responderId)
     DECLARE_QUERYABLE(fmi3GetFloat64, responderId)
+    DECLARE_QUERYABLE(fmi3SetInt8, responderId)
+    DECLARE_QUERYABLE(fmi3GetInt8, responderId)
+    DECLARE_QUERYABLE(fmi3SetUInt8, responderId)
+    DECLARE_QUERYABLE(fmi3GetUInt8, responderId)
+    DECLARE_QUERYABLE(fmi3SetInt16, responderId)
+    DECLARE_QUERYABLE(fmi3GetInt16, responderId)
+    DECLARE_QUERYABLE(fmi3SetUInt16, responderId)
+    DECLARE_QUERYABLE(fmi3GetUInt16, responderId)
+    DECLARE_QUERYABLE(fmi3SetInt32, responderId)
+    DECLARE_QUERYABLE(fmi3GetInt32, responderId)
+    DECLARE_QUERYABLE(fmi3SetUInt32, responderId)
+    DECLARE_QUERYABLE(fmi3GetUInt32, responderId)
+    DECLARE_QUERYABLE(fmi3SetInt64, responderId)
+    DECLARE_QUERYABLE(fmi3GetInt64, responderId)
+    DECLARE_QUERYABLE(fmi3SetUInt64, responderId)
+    DECLARE_QUERYABLE(fmi3GetUInt64, responderId)
+    DECLARE_QUERYABLE(fmi3SetBoolean, responderId)
+    DECLARE_QUERYABLE(fmi3GetBoolean, responderId)
+    DECLARE_QUERYABLE(fmi3SetString, responderId)
+    DECLARE_QUERYABLE(fmi3GetString, responderId)
+    DECLARE_QUERYABLE(fmi3SetClock, responderId)
+    DECLARE_QUERYABLE(fmi3GetClock, responderId)
+    DECLARE_QUERYABLE(fmi3SetBinary, responderId)
+    DECLARE_QUERYABLE(fmi3GetBinary, responderId)
+    DECLARE_QUERYABLE(fmi3Reset, responderId)
     DECLARE_QUERYABLE(fmi3Terminate, responderId)
 
-    printf("Now is listening!\n");
+    printf("Liaison server is now listening!\n");
     printf("Enter 'q' to quit...\n");
     int c = 0;
     while (c != 'q') {
@@ -343,7 +732,7 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
     int error = 0;
     zip_t* fmu = zip_open(outputFmuPath.c_str(), ZIP_CREATE | ZIP_TRUNCATE, &error);
     if (!fmu) {
-        std::cerr << "Failed to create FMU at: " << outputFmuPath << std::endl;
+        std::cerr << "Failed to create FMU at: " << outputFmuPath << " Error: " << zip_strerror(fmu) << std::endl;
         return;
     }
 
@@ -364,17 +753,17 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
         return;
     }
 
-    // Add the responderId.txt fiel to the FMU at the base directory
+    // Add the responderId.txt field to the FMU at the base directory
     std::string responderIdPath = createResponderIdFile(tempPath, responderId);
     if (!addFileToZip(fmu, responderIdPath, "binaries/responderId")) {
-        std::cerr << "Error copyng the responderId file to FMU." << std::endl;
+        std::cerr << "Error copying the responderId file to FMU." << std::endl;
         zip_discard(fmu);
         return;
     }
 
     // Close the zip archive
     if (zip_close(fmu) < 0) {
-        std::cerr << "Failed to finalize FMU zip archive" << std::endl;
+        std::cerr << "Failed to finalize FMU zip archive: " << zip_strerror(fmu) << std::endl;
         return;
     }
 
