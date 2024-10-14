@@ -70,7 +70,7 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-c.git
           mkdir zenoh-c/build
           cd zenoh-c/build
-          cmake ../ -DBUILD_SHARED_LIBS=TRUE -DCMAKE_BUILD_TYPE=Release
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release --target install
 
       - name: Build and install Zenoh-cpp
@@ -78,13 +78,13 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-cpp.git
           mkdir zenoh-cpp/build
           cd zenoh-cpp/build
-          cmake ../ -DBUILD_SHARED_LIBS=TRUE -DCMAKE_BUILD_TYPE=Release
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release --target install
 
       - name: Download and build Protobuf from source
         run: |
           curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v3.20.1/protobuf-cpp-3.20.1.zip
-          tar -xf protobuf-cpp-3.20.1.zip
+          powershell -command "Expand-Archive -Path protobuf-cpp-3.20.1.zip -DestinationPath ."
           cd protobuf-3.20.1
           mkdir build && cd build
           cmake ..
@@ -93,7 +93,7 @@ jobs:
       - name: Download and build libzip from source
         run: |
           curl -LO https://libzip.org/download/libzip-1.11.1.tar.gz
-          tar -xzf libzip-1.11.1.tar.gz
+          powershell -command "tar -xzf libzip-1.11.1.tar.gz"
           cd libzip-1.11.1
           mkdir build && cd build
           cmake .. -DBUILD_SHARED_LIBS=OFF
@@ -101,7 +101,9 @@ jobs:
 
       - name: Build Liaison
         run: |
-          mkdir -p build && cd build && cmake .. && cmake --build . --target install
+          mkdir -p build && cd build
+          cmake ..
+          cmake --build . --target install
 
       - name: Debug Build Output (Linux)
         run: |
