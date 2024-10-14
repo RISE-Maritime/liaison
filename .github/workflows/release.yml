@@ -19,7 +19,7 @@ jobs:
 
       - name: Build and tag DevContainer image
         run: |
-          docker build -t linux-container-image -f .devcontainer/DockerfileLinux .
+          docker build -t linux-container-image -f .devcontainer .
 
       - name: Run DevContainer and build project
         run: |
@@ -40,29 +40,69 @@ jobs:
   build_windows:
     name: Build on Windows
     runs-on: windows-latest
+
     steps:
-      - name: Checkout repository
+      - name: Check out repository
         uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Build and tag DevContainer image (Windows)
+      - name: Install Chocolatey
         run: |
-          export DOCKER_BUILDKIT=0
-          docker build -t windows-container-image -f .devcontainer/DockerfileWindows .
+          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
-      - name: Run DevContainer and build project (Windows)
+      - name: Install dependencies
         run: |
-          docker run --rm -v "${{ github.workspace }}":/workspace -w /workspace windows-container-image \
-          cmd /c "mkdir build && cd build && cmake .. -G \"NMake Makefiles\" && nmake"
+          choco install -y git cmake python3 make openssl
+          choco install rust --version=1.81.0
 
-      - name: Debug Build Output (Windows)
+      - name: Set environment variables for Rust
+        shell: bash
         run: |
-          echo "Listing build directory on Windows:"
-          dir build
+          echo "CARGO_HOME=$HOME/.cargo" >> $GITHUB_ENV
+          echo "RUSTUP_HOME=$HOME/.rustup" >> $GITHUB_ENV
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          rustup --version
+          cargo --version
 
-      - name: Upload Release Asset (Windows)
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build\\liaison.exe
+      - name: Build and install Zenoh-c
+        run: |
+          git clone https://github.com/eclipse-zenoh/zenoh-c.git
+          mkdir zenoh-c/build
+          cd zenoh-c/build
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE
+          cmake --build . --target install
+
+      - name: Build and install Zenoh-cpp
+        run: |
+          git clone https://github.com/eclipse-zenoh/zenoh-cpp.git
+          mkdir zenoh-cpp/build
+          cd zenoh-cpp/build
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE
+          cmake --build . --target install
+
+      - name: Download and build Protobuf from source
+        run: |
+          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v3.20.1/protobuf-cpp-3.20.1.zip
+          tar -xf protobuf-cpp-3.20.1.zip
+          cd protobuf-3.20.1
+          mkdir build && cd build
+          cmake ..
+          cmake --build . --target install
+
+      - name: Download and build libzip from source
+        run: |
+          curl -LO https://libzip.org/download/libzip-1.11.1.tar.gz
+          tar -xzf libzip-1.11.1.tar.gz
+          cd libzip-1.11.1
+          mkdir build && cd build
+          cmake .. -DBUILD_SHARED_LIBS=OFF
+          cmake --build . --target install
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install fmpy[complete]==0.3.20
+
+      - name: Verify installation
+        run: |
+          python --version
+          cargo --version

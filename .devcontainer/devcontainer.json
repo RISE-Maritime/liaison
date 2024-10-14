@@ -1,7 +1,7 @@
 {
   "name": "liaison",
   "build": {
-    "dockerfile": "DockerfileLinux"
+    "dockerfile": "Dockerfile"
   },
   "remoteUser": "vscode",
   "mounts": ["source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind"],
