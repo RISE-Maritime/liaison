@@ -3,7 +3,7 @@
   "build": {
     "dockerfile": "DockerfileLinux"
   },
-  "remoteUser": "root",
+  "remoteUser": "vscode",
   "mounts": ["source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind"],
   "customizations": {
     "vscode": {
