@@ -47,7 +47,9 @@ jobs:
 
       - name: Install Chocolatey
         run: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+          iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
       - name: Install dependencies
         run: |
@@ -55,11 +57,11 @@ jobs:
           choco install rust --version=1.81.0
 
       - name: Set environment variables for Rust
-        shell: bash
+        shell: powershell
         run: |
-          echo "CARGO_HOME=$HOME/.cargo" >> $GITHUB_ENV
-          echo "RUSTUP_HOME=$HOME/.rustup" >> $GITHUB_ENV
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          echo "CARGO_HOME=$env:USERPROFILE\\.cargo" >> $env:GITHUB_ENV
+          echo "RUSTUP_HOME=$env:USERPROFILE\\.rustup" >> $env:GITHUB_ENV
+          echo "$env:USERPROFILE\\.cargo\\bin" >> $env:GITHUB_PATH
           rustup --version
           cargo --version
 
@@ -69,7 +71,6 @@ jobs:
           mkdir zenoh-c/build
           cd zenoh-c/build
           cmake ../ -DBUILD_SHARED_LIBS=TRUE -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release
           cmake --build . --config Release --target install
 
       - name: Build and install Zenoh-cpp
