@@ -1,11 +1,13 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - feature/compile_windows
 
 jobs:
-  build:
+  build_linux:
+    name: Build on Linux
     runs-on: ubuntu-latest
 
     steps:
@@ -17,20 +19,49 @@ jobs:
 
       - name: Build and tag DevContainer image
         run: |
-          docker build -t my-devcontainer-image .devcontainer
+          docker build -t linux-container-image .devcontainer/DockerfileLinux
 
       - name: Run DevContainer and build project
         run: |
-          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace my-devcontainer-image \
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace linux-container-image \
           bash -c "mkdir -p build && cd build && cmake .. && make"
-      - name: Debug Build Output
+
+      - name: Debug Build Output (Linux)
         run: |
           echo "Listing build directory:"
           ls -la /
           ls -la build/
           
-
-      - name: Upload Release Asset
+      - name: Upload Release Asset (Linux)
         uses: softprops/action-gh-release@v2
         with:
           files: build/liaison
+        
+  build_windows:
+      name: Build on Windows
+      runs-on: windows-latest
+      steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and tag DevContainer image (Windows)
+        run: |
+          docker build -t windows-container-image -f .devcontainer/DockerfileWindows
+
+      - name: Run DevContainer and build project (Windows)
+        run: |
+          docker run --rm -v "${{ github.workspace }}":/workspace -w /workspace windows-container-image \
+          cmd /c "mkdir build && cd build && cmake .. -G \"NMake Makefiles\" && nmake"
+
+      - name: Debug Build Output (Windows)
+        run: |
+          echo "Listing build directory on Windows:"
+          dir build
+
+      - name: Upload Release Asset (Windows)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build\\liaison.exe
