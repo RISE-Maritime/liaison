@@ -69,7 +69,8 @@ jobs:
           mkdir zenoh-c/build
           cd zenoh-c/build
           cmake ../ -DBUILD_SHARED_LIBS=FALSE 
-          cmake --build . --config Release --target install
+          cmake --build . --config Release
+          cmake --build . --target install
 
       - name: Build and install Zenoh-cpp
         run: |
