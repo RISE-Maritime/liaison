@@ -70,7 +70,7 @@ jobs:
           cd zenoh-c/build
           cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
-          cmake --build . --target install
+          cmake --build . --config Release --target install
 
       - name: Build and install Zenoh-cpp
         run: |
@@ -78,7 +78,7 @@ jobs:
           mkdir zenoh-cpp/build
           cd zenoh-cpp/build
           cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --target install
+          cmake --build . --config Release --target install
 
       - name: Download and build Protobuf from source
         run: |
