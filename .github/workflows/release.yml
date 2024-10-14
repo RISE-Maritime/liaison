@@ -49,6 +49,7 @@ jobs:
 
       - name: Build and tag DevContainer image (Windows)
         run: |
+          export DOCKER_BUILDKIT=0
           docker build -t windows-container-image -f .devcontainer/DockerfileWindows .
 
       - name: Run DevContainer and build project (Windows)
