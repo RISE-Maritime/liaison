@@ -19,7 +19,7 @@ jobs:
 
       - name: Build and tag DevContainer image
         run: |
-          docker build -t linux-container-image .devcontainer/DockerfileLinux
+          docker build -t linux-container-image -f .devcontainer/DockerfileLinux .
 
       - name: Run DevContainer and build project
         run: |
@@ -31,16 +31,16 @@ jobs:
           echo "Listing build directory:"
           ls -la /
           ls -la build/
-          
+
       - name: Upload Release Asset (Linux)
         uses: softprops/action-gh-release@v2
         with:
           files: build/liaison
-        
+
   build_windows:
-      name: Build on Windows
-      runs-on: windows-latest
-      steps:
+    name: Build on Windows
+    runs-on: windows-latest
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -49,7 +49,7 @@ jobs:
 
       - name: Build and tag DevContainer image (Windows)
         run: |
-          docker build -t windows-container-image -f .devcontainer/DockerfileWindows
+          docker build -t windows-container-image -f .devcontainer/DockerfileWindows .
 
       - name: Run DevContainer and build project (Windows)
         run: |
