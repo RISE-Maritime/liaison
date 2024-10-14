@@ -68,8 +68,8 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-c.git
           mkdir zenoh-c/build
           cd zenoh-c/build
-          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --target install
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE 
+          cmake --build . --config Release --target install
 
       - name: Build and install Zenoh-cpp
         run: |
