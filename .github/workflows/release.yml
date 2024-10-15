@@ -107,8 +107,7 @@ jobs:
           mkdir zenoh-c/build
           cd zenoh-c/build
           cmake ../ -GNinja -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
-          ninja
-          ninja install
+          cmake --build . --config Release --target install
 
       - name: Build and install Zenoh-cpp
         run: |
@@ -116,8 +115,7 @@ jobs:
           mkdir zenoh-cpp/build
           cd zenoh-cpp/build
           cmake ../ -GNinja -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
-          ninja
-          ninja install
+          cmake --build . --config Release --target install
 
       - name: Build Liaison
         run: |
