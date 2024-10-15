@@ -110,8 +110,9 @@ jobs:
       - name: Build Liaison
         run: |
           mkdir -p build && cd build
-          cmake ..
-          cmake --build . --target install
+          cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake
+          ninja
+          ninja install
 
       - name: Debug Build Output (Linux)
         run: |
