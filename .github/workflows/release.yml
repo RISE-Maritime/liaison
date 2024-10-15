@@ -53,7 +53,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          choco install -y git cmake make ninja openssl
+          choco install -y git cmake make ninja openssl zlib
           choco install rust --version=1.81.0
 
       - name: Set environment variables for Rust
