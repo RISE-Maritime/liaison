@@ -86,7 +86,7 @@ jobs:
           curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v3.20.1/protobuf-cpp-3.20.1.zip
           powershell -command "Expand-Archive -Path protobuf-cpp-3.20.1.zip -DestinationPath ."
           cd protobuf-3.20.1
-          mkdir build && cd build
+          mkdir build-proto && cd build-proto
           cmake ..
           cmake --build . --target install
 
@@ -95,7 +95,7 @@ jobs:
           curl -LO https://libzip.org/download/libzip-1.11.1.tar.gz
           powershell -command "tar -xzf libzip-1.11.1.tar.gz"
           cd libzip-1.11.1
-          mkdir build && cd build
+          mkdir build-libzip && cd build-libzip
           cmake .. -DBUILD_SHARED_LIBS=OFF
           cmake --build . --target install
 
