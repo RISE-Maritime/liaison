@@ -99,7 +99,7 @@ jobs:
       - name: Check Protobuf
         run: |
           echo "Listing build directory:"
-          dir ../vcpkg/scripts/buildsystems
+          dir D:/a/liaison/liaison/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build and install Zenoh-c
         run: |
@@ -122,7 +122,7 @@ jobs:
       - name: Build Liaison
         run: |
           mkdir -p build && cd build
-          cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake
+          cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=D:/a/liaison/liaison/vcpkg/scripts/buildsystems/vcpkg.cmakee
           ninja
           ninja install
 
