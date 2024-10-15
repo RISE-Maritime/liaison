@@ -56,6 +56,25 @@ jobs:
           choco install -y git cmake make ninja openssl zlib
           choco install rust --version=1.81.0
 
+      - name: Download and build zlib from source
+        run: |
+          git clone https://github.com/madler/zlib.git
+          mkdir zlib/build
+          cd zlib/build
+          cmake ..
+          cmake --build . --config Release
+          cmake --install .
+
+      - name: Download and build libzip from source
+        run: |
+          curl -LO https://libzip.org/download/libzip-1.11.1.tar.gz
+          powershell -command "tar -xzf libzip-1.11.1.tar.gz"
+          cd libzip-1.11.1
+          mkdir build-libzip && cd build-libzip
+          cmake .. -G Ninja -DBUILD_SHARED_LIBS=OFF -DENABLE_ZLIB=ON
+          ninja
+          ninja install
+
       - name: Set environment variables for Rust
         shell: powershell
         run: |
@@ -71,15 +90,6 @@ jobs:
           powershell -command "Expand-Archive -Path protobuf-cpp-3.20.1.zip -DestinationPath ."
           cd protobuf-3.20.1
           vcpkg install protobuf protobuf:x64-windows
-
-      - name: Download and build libzip from source
-        run: |
-          curl -LO https://libzip.org/download/libzip-1.11.1.tar.gz
-          powershell -command "tar -xzf libzip-1.11.1.tar.gz"
-          cd libzip-1.11.1
-          mkdir build-libzip && cd build-libzip
-          cmake .. -DBUILD_SHARED_LIBS=OFF
-          cmake --build . --target install
 
       - name: Build and install Zenoh-c
         run: |
