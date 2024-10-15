@@ -96,21 +96,28 @@ jobs:
           ninja
           ninja install
 
+      - name: Check Protobuf
+        run: |
+          echo "Listing build directory:"
+          dir ../vcpkg/scripts/buildsystems
+
       - name: Build and install Zenoh-c
         run: |
           git clone https://github.com/eclipse-zenoh/zenoh-c.git
           mkdir zenoh-c/build
           cd zenoh-c/build
-          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release --target install
+          cmake ../ -GNinja -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
+          ninja
+          ninja install
 
       - name: Build and install Zenoh-cpp
         run: |
           git clone https://github.com/eclipse-zenoh/zenoh-cpp.git
           mkdir zenoh-cpp/build
           cd zenoh-cpp/build
-          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release --target install
+          cmake ../ -GNinja -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
+          ninja
+          ninja install
 
       - name: Build Liaison
         run: |
@@ -119,7 +126,10 @@ jobs:
           ninja
           ninja install
 
-      - name: Debug Build Output (Linux)
+      - name: Debug Build Output
         run: |
           echo "Listing build directory:"
           dir build
+
+# cmake --build . --config Release --target install
+# cmake --build . --config Release --target install
