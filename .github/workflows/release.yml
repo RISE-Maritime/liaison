@@ -82,7 +82,7 @@ jobs:
           git clone https://github.com/madler/zlib.git
           mkdir zlib/build
           cd zlib/build
-          cmake .. -G Ninja 
+          cmake .. 
           ninja
           ninja install
 
@@ -92,7 +92,7 @@ jobs:
           powershell -command "tar -xzf libzip-1.11.1.tar.gz"
           cd libzip-1.11.1
           mkdir build-libzip && cd build-libzip
-          cmake .. -G Ninja -DBUILD_SHARED_LIBS=OFF -DENABLE_ZLIB=ON
+          cmake .. -DBUILD_SHARED_LIBS=OFF -DENABLE_ZLIB=ON
           ninja
           ninja install
 
