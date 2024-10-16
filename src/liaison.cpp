@@ -1,5 +1,9 @@
-#include <dlfcn.h> 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
 #include <unistd.h>
+#endif
 #include <sys/stat.h>
 #include <unordered_map>
 #include <filesystem>
@@ -15,6 +19,8 @@
 // MACROS
 
 #define MAX_BINARY_SIZE 4096
+
+
 
 #define DECLARE_QUERYABLE(FMI3FUNCTION, RESPONDER_ID) \
     std::string expr_##FMI3FUNCTION = "rpc/" + RESPONDER_ID + "/" + std::string(#FMI3FUNCTION); \
@@ -35,9 +41,15 @@
     auto output_payload = zenoh::Bytes(std::move(output_wire)); \
     QUERY.reply(QUERY.get_keyexpr(), std::move(output_payload)); \
 
-
+// Platform-specific loading/unloading of libraries and symbol resolution
+#ifdef _WIN32
+#define BIND_FMU_LIBRARY_FUNCTION(FMI3FUNCTION) \
+    fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)GetProcAddress(fmuLibrary, #FMI3FUNCTION);
+#else
 #define BIND_FMU_LIBRARY_FUNCTION(FMI3FUNCTION) \
     fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)dlsym(fmuLibrary, #FMI3FUNCTION);
+#endif
+
 
 #define DEFINE_FMI3_GET_VALUE_FUNCTION(TYPE) \
 void fmi3Get##TYPE(const zenoh::Query& query) { \
@@ -100,6 +112,32 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
 }
 
 // end of MACROS
+
+// Function to load FMU library (platform-specific)
+void* loadFmuLibrary(const std::string& libPath) {
+#ifdef _WIN32
+    HMODULE handle = LoadLibrary(libPath.c_str());
+    if (!handle) {
+        throw std::runtime_error("Failed to load FMU library: " + std::to_string(GetLastError()));
+    }
+    return handle;
+#else
+    void* handle = dlopen(libPath.c_str(), RTLD_LAZY);
+    if (!handle) {
+        throw std::runtime_error("Failed to load FMU library: " + std::string(dlerror()));
+    }
+    return handle;
+#endif
+}
+
+// Function to unload FMU library (platform-specific)
+void unloadFmuLibrary(void* handle) {
+#ifdef _WIN32
+    FreeLibrary((HMODULE)handle);
+#else
+    dlclose(handle);
+#endif
+}
 
 // Map that holds the FMU instances
 std::unordered_map<int, fmi3Instance> instances;
@@ -581,6 +619,13 @@ namespace callbacks {
 
 }
 
+std::string constructLibraryPath(const std::string& tempPath, const std::string& modelName) {
+#ifdef _WIN32
+    return tempPath + "/binaries/win64/" + modelName + ".dll";
+#else
+    return tempPath + "/binaries/x86_64-linux/" + modelName + ".so";
+#endif
+}
 
 int startServer(const std::string& fmuPath, const std::string& responderId) {
     std::cout << "Starting server using:" << std::endl;
@@ -591,11 +636,10 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     std::filesystem::path fmuFilePath(fmuPath);
     std::string modelName = fmuFilePath.stem().string();
     std::string tempPath = unzipFmu(fmuPath);
-    std::string libPath = tempPath + "/binaries/x86_64-linux/" + modelName + ".so";
-    void* fmuLibrary = dlopen(libPath.c_str(), RTLD_LAZY);
-    if (!fmuLibrary) {
-        throw std::runtime_error("Failed to load FMU library: " + std::string(dlerror()));
-    }
+    std::string libPath = constructLibraryPath(tempPath, modelName);
+    
+    // Load the FMU library dynamically
+    void* fmuLibrary = loadFmuLibrary(libPath);
 
     // Bind FMU library functions
     BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateCoSimulation)
@@ -685,9 +729,16 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     while (c != 'q') {
         c = getchar();
         if (c == -1) {
-            usleep(1);
+#ifdef _WIN32
+        Sleep(100);
+#else
+        usleep(100000); 
+#endif
         }
     }
+
+    // Unload the FMU library before exiting
+    unloadFmuLibrary(fmuLibrary);
 
     return 0;
 }

@@ -19,9 +19,14 @@ find_package(Protobuf REQUIRED STATIC)
 include_directories(${PROTOBUF_INCLUDE_DIR})
 
 # Incluce libzip and zlib
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(libzip REQUIRED libzip)
-pkg_check_modules(zlib REQUIRED zlib)
+if (WIN32)
+    find_package(libzip REQUIRED)
+    find_package(zlib REQUIRED)
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(libzip REQUIRED libzip)
+    pkg_check_modules(zlib REQUIRED zlib)
+endif()
 include_directories(${libzip_INCLUDE_DIRS})
 include_directories(${zlib_INCLUDE_DIRS})
 
