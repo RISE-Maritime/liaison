@@ -71,11 +71,15 @@ jobs:
           cd vcpkg
           .\bootstrap-vcpkg.bat
 
+      - name: Install pkg-config via vcpkg
+        run: |
+          cd vcpkg
+          ./vcpkg install pkg-config
+
       - name: Download and build Protobuf
         run: |
           cd vcpkg
           ./vcpkg install protobuf protobuf:x64-windows
-          ./vcpkg integrate install
 
       - name: Download and build zlib
         run: |
@@ -95,11 +99,6 @@ jobs:
           cmake .. -G Ninja -DBUILD_SHARED_LIBS=OFF -DENABLE_ZLIB=ON
           ninja
           ninja install
-
-      - name: Check Protobuf
-        run: |
-          echo "Listing build directory:"
-          dir D:/a/liaison/liaison/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build and install Zenoh-c
         run: |
