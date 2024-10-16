@@ -120,7 +120,7 @@ jobs:
       - name: Build Liaison
         run: |
           mkdir -p build && cd build
-          cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=D:/a/liaison/liaison/vcpkg/scripts/buildsystems/vcpkg.cmakee
+          cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=D:/a/liaison/liaison/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
           ninja
           ninja install
 
