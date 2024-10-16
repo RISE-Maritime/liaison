@@ -74,9 +74,9 @@ jobs:
       - name: Download and build Protobuf
         run: |
           cd vcpkg
-          ./vcpkg install protobuf:x64-windows 
-          ./vcpkg install zlib:x64-windows
-          ./vcpkg install libzip:x64-windows
+          ./vcpkg install protobuf:x64-windows-static 
+          ./vcpkg install zlib:x64-windows-static
+          ./vcpkg install libzip:x64-windows-static
 
       - name: Build and install Zenoh-c
         run: |
