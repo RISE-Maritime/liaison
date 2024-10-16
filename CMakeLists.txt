@@ -20,6 +20,7 @@ include_directories(${PROTOBUF_INCLUDE_DIR})
 
 # Include libzip and zlib
 if (WIN32)
+    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows-static")
     find_package(libzip CONFIG REQUIRED)
     find_package(zlib REQUIRED)
 else()
