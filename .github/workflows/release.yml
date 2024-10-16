@@ -53,7 +53,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          choco install -y git cmake make ninja openssl zlib
+          choco install -y git cmake make ninja openssl zlib pkgconfiglite
           choco install rust --version=1.81.0
 
       - name: Set environment variables for Rust
@@ -70,11 +70,6 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
-
-      - name: Install pkg-config via vcpkg
-        run: |
-          cd vcpkg
-          ./vcpkg install pkg-config
 
       - name: Download and build Protobuf
         run: |
