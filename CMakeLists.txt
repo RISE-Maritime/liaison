@@ -16,7 +16,7 @@ set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
 
 # Include Protobuf
 find_package(Protobuf REQUIRED STATIC)
-include_directories(${PROTOBUF_INCLUDE_DIR})
+include_directories(${PROTOBUF_INCLUDE_DIRS})
 
 # Include libzip and zlib
 if (WIN32)
@@ -36,6 +36,9 @@ include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}                   # For generated protobuf files
     ${CMAKE_CURRENT_SOURCE_DIR}/external/fmi3   # For FMI headers
 )
+
+message(STATUS "libzip include dirs: ${libzip_INCLUDE_DIRS}")
+message(STATUS "Protobuf include dirs: ${PROTOBUF_INCLUDE_DIRS}")
 
 # Generate protobuf files
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS src/fmi3.proto)
