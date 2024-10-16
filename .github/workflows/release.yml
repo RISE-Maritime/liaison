@@ -106,7 +106,7 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-c.git
           mkdir zenoh-c/build
           cd zenoh-c/build
-          cmake ../ -GNinja -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release --target install
 
       - name: Build and install Zenoh-cpp
@@ -114,7 +114,7 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-cpp.git
           mkdir zenoh-cpp/build
           cd zenoh-cpp/build
-          cmake ../ -GNinja -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release --target install
 
       - name: Build Liaison
