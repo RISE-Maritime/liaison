@@ -18,13 +18,13 @@ set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
 find_package(Protobuf REQUIRED STATIC)
 include_directories(${PROTOBUF_INCLUDE_DIR})
 
-# Incluce libzip and zlib
+# Include libzip and zlib
 if (WIN32)
-    find_package(libzip REQUIRED)
+    find_package(libzip CONFIG REQUIRED)
     find_package(zlib REQUIRED)
 else()
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(libzip CONFIG REQUIRED libzip)
+    pkg_check_modules(libzip REQUIRED libzip)
     pkg_check_modules(zlib REQUIRED zlib)
 endif()
 include_directories(${libzip_INCLUDE_DIRS})
