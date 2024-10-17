@@ -1,9 +1,14 @@
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#include <unistd.h>
+#endif
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <regex>
-#include <dlfcn.h>
 #include <filesystem>
 #include "zenoh.hxx"
 #include "fmi3.pb.h"
@@ -115,12 +120,22 @@ fmi3Status transformToFmi3Status(proto::Status status) {
     }
 }
 
+#ifdef _WIN32
+std::string getBaseDirectory() {
+    char path[MAX_PATH];
+    HMODULE hModule = GetModuleHandle(NULL);
+    GetModuleFileName(hModule, path, MAX_PATH);
+    std::filesystem::path libraryPath(path);
+    return libraryPath.parent_path().parent_path().string(); 
+}
+#else
 std::string getBaseDirectory() {
     Dl_info dl_info;
     dladdr((void*)getBaseDirectory, &dl_info);
     std::filesystem::path libraryPath(dl_info.dli_fname);
     return libraryPath.parent_path().parent_path().string(); 
 }
+#endif
 
 void printDirectoryContents(const std::string& directoryPath) {
     try {

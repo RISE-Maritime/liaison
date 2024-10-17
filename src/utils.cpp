@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <vector> 
 #include <filesystem>
 #include <zip.h>
@@ -43,6 +46,23 @@ void createDirectories(const std::string& path) {
     std::filesystem::create_directories(path);
 }
 
+
+#ifdef _WIN32
+std::string createTempDirectory() {
+    char tempPath[MAX_PATH];
+    GetTempPath(MAX_PATH, tempPath);
+    char tempDir[MAX_PATH];
+    if (GetTempFileName(tempPath, "liaison", 0, tempDir) == 0) {
+        throw std::runtime_error("Failed to create temporary directory.");
+    }
+    // Delete the file and create a directory instead
+    DeleteFile(tempDir);
+    if (!CreateDirectory(tempDir, NULL)) {
+        throw std::runtime_error("Failed to create temporary directory.");
+    }
+    return std::string(tempDir);
+}
+#else
 std::string createTempDirectory() {
     char tempDirTemplate[] = "/tmp/liaison.XXXXXX";
     char* tempDirPath = mkdtemp(tempDirTemplate);
@@ -51,6 +71,8 @@ std::string createTempDirectory() {
     }
     return std::string(tempDirPath);
 }
+#endif
+
 
 std::string unzipFmu(const std::string& fmuPath) {
     int err = 0;
@@ -67,10 +89,10 @@ std::string unzipFmu(const std::string& fmuPath) {
 
     for (int i = 0; i < zip_get_num_entries(z, 0); ++i) {
         if (zip_stat_index(z, i, 0, &st) == 0) {
-            std::string outPath = outputDir + "/" + st.name;
+            std::filesystem::path outPath = std::filesystem::path(outputDir) / st.name;
 
             // If it's a directory, create it
-            if (outPath.back() == '/') {
+            if (outPath.string().back() == '/') {
                 createDirectories(outPath);
             } else {
                 zf = zip_fopen_index(z, i, 0);
@@ -80,13 +102,13 @@ std::string unzipFmu(const std::string& fmuPath) {
                 }
 
                 // Ensure the directory for the file exists
-                createDirectories(std::filesystem::path(outPath).parent_path().string());
+                createDirectories(outPath.parent_path().string());
 
-                std::ofstream outFile(outPath, std::ios::binary);
+                std::ofstream outFile(outPath.string(), std::ios::binary);
                 if (!outFile) {
                     zip_fclose(zf);
                     zip_close(z);
-                    throw std::runtime_error("Failed to create file on disk: " + outPath);
+                    throw std::runtime_error("Failed to create file on disk: " + outPath.string());
                 }
 
                 std::vector<char> buffer(st.size);

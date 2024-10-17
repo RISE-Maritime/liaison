@@ -83,7 +83,7 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-c.git
           mkdir zenoh-c/build
           cd zenoh-c/build
-          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE
           cmake --build . --config Release --target install
 
       - name: Build and install Zenoh-cpp
@@ -91,24 +91,14 @@ jobs:
           git clone https://github.com/eclipse-zenoh/zenoh-cpp.git
           mkdir zenoh-cpp/build
           cd zenoh-cpp/build
-          cmake ../ -DBUILD_SHARED_LIBS=FALSE -DCMAKE_BUILD_TYPE=Release
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE
           cmake --build . --config Release --target install
-
-      - name: Debug find_package Output
-        run: |
-          echo "Listing  directory:"
-          dir D:/a/liaison/liaison/vcpkg/packages
-          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static
-          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static/include
-          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static/lib
-          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static/share
 
       - name: Build Liaison
         run: |
           mkdir -p build && cd build
           cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=D:/a/liaison/liaison/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
-          ninja
-          ninja install
+          cmake --build .
 
       - name: Debug Build Output
         run: |
