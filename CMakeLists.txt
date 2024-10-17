@@ -20,7 +20,7 @@ include_directories(${PROTOBUF_INCLUDE_DIRS})
 
 # Include libzip and zlib
 if (WIN32)
-    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows-static")
+    # set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows-static")
     find_package(libzip CONFIG REQUIRED)
     find_package(zlib REQUIRED)
 else()
@@ -38,6 +38,7 @@ include_directories(
 )
 
 message(STATUS "libzip include dirs: ${libzip_INCLUDE_DIRS}")
+message(STATUS "zlib include dirs: ${libzip_INCLUDE_DIRS}")
 message(STATUS "Protobuf include dirs: ${PROTOBUF_INCLUDE_DIRS}")
 
 # Generate protobuf files
