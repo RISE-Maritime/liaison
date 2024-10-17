@@ -14,6 +14,11 @@ find_package(zenohcxx REQUIRED STATIC)
 
 set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
 
+# Set vcpkg target triplet
+if (WIN32)
+    set(VCPKG_TARGET_TRIPLET x64-windows-static)
+endif()
+
 # Include Protobuf
 find_package(Protobuf REQUIRED STATIC)
 include_directories(${PROTOBUF_INCLUDE_DIRS})
