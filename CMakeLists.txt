@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
+# Set vcpkg target triplet
+if (WIN32)
+    set(VCPKG_TARGET_TRIPLET x64-windows-static)
+endif()
+
 project(Liaison LANGUAGES C CXX)
 
 if(CMAKE_BUILD_TYPE STREQUAL "")
@@ -14,10 +19,7 @@ find_package(zenohcxx REQUIRED STATIC)
 
 set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
 
-# Set vcpkg target triplet
-if (WIN32)
-    set(VCPKG_TARGET_TRIPLET x64-windows-static)
-endif()
+
 
 # Include Protobuf
 find_package(Protobuf REQUIRED STATIC)
