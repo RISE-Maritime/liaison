@@ -97,7 +97,11 @@ jobs:
       - name: Debug find_package Output
         run: |
           echo "Listing  directory:"
-          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static/share/libzip
+          dir D:/a/liaison/liaison/vcpkg/packages
+          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static
+          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static/include
+          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static/lib
+          dir D:/a/liaison/liaison/vcpkg/installed/x64-windows-static/share
 
       - name: Build Liaison
         run: |
