@@ -1,5 +1,6 @@
 #ifdef _WIN32
 #include <windows.h>
+#undef ERROR
 #else
 #include <dlfcn.h>
 #include <unistd.h>
@@ -639,7 +640,7 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     std::string libPath = constructLibraryPath(tempPath, modelName);
     
     // Load the FMU library dynamically
-    void* fmuLibrary = loadFmuLibrary(libPath);
+    auto fmuLibrary = loadFmuLibrary(libPath);
 
     // Bind FMU library functions
     BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateCoSimulation)
@@ -758,7 +759,7 @@ std::string createResponderIdFile(const std::string& directory, const std::strin
     if (!std::filesystem::exists(filePath)) {
         throw std::runtime_error("responderId file creation failed at: " + filePath.string());
     }
-    return filePath;
+    return filePath.string();
 }
 
 void generateFmu(const std::string& fmuPath, const std::string& responderId) {
