@@ -1,5 +1,6 @@
 #ifdef _WIN32
 #include <windows.h>
+#undef ERROR
 #else
 #include <dlfcn.h>
 #include <unistd.h>
