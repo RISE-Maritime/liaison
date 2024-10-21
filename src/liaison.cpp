@@ -114,31 +114,33 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
 
 // end of MACROS
 
-// Function to load FMU library (platform-specific)
-void* loadFmuLibrary(const std::string& libPath) {
+// Function to load and unload FMU library (platform-specific)
 #ifdef _WIN32
+HMODULE loadFmuLibrary(const std::string& libPath) {
     HMODULE handle = LoadLibrary(libPath.c_str());
     if (!handle) {
         throw std::runtime_error("Failed to load FMU library: " + std::to_string(GetLastError()));
     }
     return handle;
+}
+
+void unloadFmuLibrary(HMODULE handle) {
+    FreeLibrary(handle);
+}
 #else
+void* loadFmuLibrary(const std::string& libPath) {
     void* handle = dlopen(libPath.c_str(), RTLD_LAZY);
     if (!handle) {
         throw std::runtime_error("Failed to load FMU library: " + std::string(dlerror()));
     }
     return handle;
-#endif
 }
 
-// Function to unload FMU library (platform-specific)
 void unloadFmuLibrary(void* handle) {
-#ifdef _WIN32
-    FreeLibrary((HMODULE)handle);
-#else
     dlclose(handle);
-#endif
 }
+#endif
+
 
 // Map that holds the FMU instances
 std::unordered_map<int, fmi3Instance> instances;
