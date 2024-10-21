@@ -93,7 +93,7 @@ std::string unzipFmu(const std::string& fmuPath) {
 
             // If it's a directory, create it
             if (outPath.string().back() == '/') {
-                createDirectories(outPath);
+                createDirectories(outPath.string());
             } else {
                 zf = zip_fopen_index(z, i, 0);
                 if (!zf) {
