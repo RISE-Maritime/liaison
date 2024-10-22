@@ -18,9 +18,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(zenohc REQUIRED STATIC)
 find_package(zenohcxx REQUIRED STATIC)
 
-set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
-
-
+# set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
 
 # Include Protobuf
 find_package(Protobuf REQUIRED STATIC)
@@ -28,7 +26,6 @@ include_directories(${PROTOBUF_INCLUDE_DIRS})
 
 # Include libzip and zlib
 if (WIN32)
-    # set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows-static")
     find_package(libzip CONFIG REQUIRED)
     find_package(zlib REQUIRED)
 else()
@@ -86,16 +83,7 @@ set_target_properties(liaisonfmu PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
     ARCHIVE_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
 )
-
-if(WIN32)
-    target_link_libraries(liaisonfmu PRIVATE
-        zenohcxx::zenohc
-        ${Protobuf_LIBRARIES}
-        ws2_32
-    )
-else()
-    target_link_libraries(liaisonfmu PRIVATE
-        zenohcxx::zenohc
-        ${Protobuf_LIBRARIES}
-    )
-endif() 
+target_link_libraries(liaisonfmu PRIVATE
+    zenohcxx::zenohc
+    ${Protobuf_LIBRARIES}
+)

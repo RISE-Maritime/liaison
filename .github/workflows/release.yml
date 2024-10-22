@@ -45,31 +45,32 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
 
-      - name: Install Chocolatey
-        run: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force
-          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-          iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+      # - name: Install Chocolatey
+      #   run: |
+      #     Set-ExecutionPolicy Bypass -Scope Process -Force
+      #     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+      #     iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
       - name: Install dependencies
         run: |
-          choco install -y git cmake make ninja openssl
-          choco install rust --version=1.81.0
+          choco install -y make ninja
+      # choco install -y git cmake make ninja openssl
+      #     choco install rust --version=1.81.0
 
-      - name: Set environment variables for Rust
-        shell: powershell
-        run: |
-          echo "CARGO_HOME=$env:USERPROFILE\\.cargo" >> $env:GITHUB_ENV
-          echo "RUSTUP_HOME=$env:USERPROFILE\\.rustup" >> $env:GITHUB_ENV
-          echo "$env:USERPROFILE\\.cargo\\bin" >> $env:GITHUB_PATH
-          rustup --version
-          cargo --version
+      # - name: Set environment variables for Rust
+      #   shell: powershell
+      #   run: |
+      #     echo "CARGO_HOME=$env:USERPROFILE\\.cargo" >> $env:GITHUB_ENV
+      #     echo "RUSTUP_HOME=$env:USERPROFILE\\.rustup" >> $env:GITHUB_ENV
+      #     echo "$env:USERPROFILE\\.cargo\\bin" >> $env:GITHUB_PATH
+      #     rustup --version
+      #     cargo --version
 
-      - name: Install vcpkg
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          cd vcpkg
-          .\bootstrap-vcpkg.bat
+      # - name: Install vcpkg
+      #   run: |
+      #     git clone https://github.com/microsoft/vcpkg.git
+      #     cd vcpkg
+      #     .\bootstrap-vcpkg.bat
 
       - name: Install protobuf, zlib and libzip
         run: |
