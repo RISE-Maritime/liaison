@@ -74,9 +74,10 @@ jobs:
 
       - name: Install protobuf, zlib and libzip
         run: |
-          vcpkg install protobuf:x64-windows-static 
-          vcpkg install zlib:x64-windows-static
-          vcpkg install libzip:x64-windows-static
+          cd vcpkg
+          .\vcpkg install protobuf:x64-windows-static 
+          .\vcpkg install zlib:x64-windows-static
+          .\vcpkg install libzip:x64-windows-static
 
       - name: Build and install Zenoh-c
         run: |
@@ -97,32 +98,10 @@ jobs:
       - name: Build Liaison
         run: |
           mkdir -p build && cd build
-          cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/packages/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+          cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
           cmake --build .
 
       - name: Debug Build Output
         run: |
           echo "Listing build directory:"
           dir build
-
-# cmake --build . --config Release --target install
-# cmake --build . --config Release --target install
-
-# - name: Download and build zlib
-# run: |
-#   git clone https://github.com/madler/zlib.git
-#   mkdir zlib/build
-#   cd zlib/build
-#   cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
-#   ninja
-#   ninja install
-
-# - name: Download and build libzip
-# run: |
-#   curl -LO https://libzip.org/download/libzip-1.11.1.tar.gz
-#   powershell -command "tar -xzf libzip-1.11.1.tar.gz"
-#   cd libzip-1.11.1
-#   mkdir build-libzip && cd build-libzip
-#   cmake .. -G Ninja -DBUILD_SHARED_LIBS=OFF -DENABLE_ZLIB=ON
-#   ninja
-#   ninja install
