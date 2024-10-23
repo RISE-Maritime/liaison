@@ -567,7 +567,7 @@ namespace callbacks {
         fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];
         size_t* value_sizes = new size_t[nValueReferences];
         fmi3Binary* values = new fmi3Binary[nValueReferences * MAX_BINARY_SIZE]; // Assuming MAX_BINARY_SIZE is defined
-        size_t n_value;
+        size_t n_value = 0;
 
         for (size_t i = 0; i < nValueReferences; ++i) {
             value_references[i] = input.value_references()[i];
