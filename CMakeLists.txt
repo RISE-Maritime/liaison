@@ -36,6 +36,12 @@ endif()
 include_directories(${libzip_INCLUDE_DIRS})
 include_directories(${zlib_INCLUDE_DIRS})
 
+# Set static runtime libraries for MSVC
+if (MSVC)
+    set(CMAKE_CXX_FLAGS_RELEASE "/MT")
+    set(CMAKE_C_FLAGS_RELEASE "/MT")
+endif()
+
 # Include directories with header files
 include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}                   # For generated protobuf files

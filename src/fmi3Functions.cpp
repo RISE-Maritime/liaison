@@ -87,12 +87,51 @@ fmi3Status fmi3Get##TYPE( \
     auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
     auto res = replies.recv(); \
     if (!std::holds_alternative<zenoh::Reply>(res)) { \
-        throw std::runtime_error("Expected zenoh::Reply but got something else"); \
+        std::cerr << "Exception in" << fmi3Function << ": Expected a Zenoh Reply but got something else." << std::endl; \
+        return fmi3Error;\
     } \
     const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
     const auto& output_payload = sample.get_payload(); \
     std::vector<uint8_t> output_wire = output_payload.as_vector(); \
     output.ParseFromArray(output_wire.data(), output_wire.size()); \
+
+#define QUERY_INSTANCE(fmi3Function, input, output, responderId) \
+    std::cout << "Querying " << fmi3Function << std::endl; \
+    std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
+    input.SerializeToArray(input_wire.data(), input_wire.size()); \
+    std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
+    zenoh::Session::GetOptions options; \
+    options.target = zenoh::QueryTarget::Z_QUERY_TARGET_ALL; \
+    options.payload = zenoh::Bytes(std::move(input_wire)); \
+    auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
+    auto res = replies.recv(); \
+    if (!std::holds_alternative<zenoh::Reply>(res)) { \
+        std::cerr << "Exception in" << fmi3Function << ": Expected a Zenoh Reply but got something else." << std::endl; \
+        return nullptr;\
+    } \
+    const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
+    const auto& output_payload = sample.get_payload(); \
+    std::vector<uint8_t> output_wire = output_payload.as_vector(); \
+    output.ParseFromArray(output_wire.data(), output_wire.size()); \
+
+#define QUERY_VOID(fmi3Function, input, output, responderId) \
+    std::cout << "Querying " << fmi3Function << std::endl; \
+    std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
+    input.SerializeToArray(input_wire.data(), input_wire.size()); \
+    std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
+    zenoh::Session::GetOptions options; \
+    options.target = zenoh::QueryTarget::Z_QUERY_TARGET_ALL; \
+    options.payload = zenoh::Bytes(std::move(input_wire)); \
+    auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
+    auto res = replies.recv(); \
+    if (!std::holds_alternative<zenoh::Reply>(res)) { \
+        std::cerr << "Exception in" << fmi3Function << ": Expected a Zenoh Reply but got something else." << std::endl; \
+        return; \
+    } \
+    const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
+    const auto& output_payload = sample.get_payload(); \
+    std::vector<uint8_t> output_wire = output_payload.as_vector(); \
+    output.ParseFromArray(output_wire.data(), output_wire.size()); 
 
 // end of MACROS
 
@@ -117,7 +156,7 @@ fmi3Status transformToFmi3Status(proto::Status status) {
         case proto::DISCARD: return fmi3Discard;
         case proto::ERROR: return fmi3Error;
         case proto::FATAL: return fmi3Fatal;
-        default: throw std::invalid_argument("Invalid status value");
+        default: return fmi3Fatal; 
     }
 }
 
@@ -189,8 +228,7 @@ void StartZenohSession() {
     try {
         readResponderId();
     } catch (const std::runtime_error& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        throw;
+        throw std::runtime_error(std::string("Could not read responderId file - ") + e.what());
     }
     // Start Zenoh Session
     try {
@@ -198,8 +236,7 @@ void StartZenohSession() {
         session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(config)));
         std::cout << "Zenoh Session started successfully." << std::endl;
     } catch (const std::exception &e) {
-        std::cerr << "Failed to start Zenoh Session: " << e.what() << std::endl;
-        throw;
+        throw std::runtime_error(std::string("Failed to start Zenoh Session - ") + e.what());
     }
 }
 
@@ -255,8 +292,13 @@ fmi3Instance fmi3InstantiateModelExchange(
     fmi3Boolean                    loggingOn,
     fmi3InstanceEnvironment        instanceEnvironment,
     fmi3LogMessageCallback         logMessage) {
-
-    StartZenohSession();
+    
+    try {
+        StartZenohSession();
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to start Zenoh Session - " << e.what() << std::endl;
+        return nullptr;
+    }
     
     proto::fmi3InstantiateModelExchangeMessage input;
     proto::fmi3InstanceMessage output;
@@ -267,7 +309,7 @@ fmi3Instance fmi3InstantiateModelExchange(
     input.set_visible(visible);
     input.set_logging_on(loggingOn);
 
-    QUERY("fmi3InstantiateModelExchange", input, output, responderId)
+    QUERY_INSTANCE("fmi3InstantiateModelExchange", input, output, responderId)
 
     std::cout << "Instance: " << output.instance_index() << std::endl;
 
@@ -293,7 +335,12 @@ fmi3Instance fmi3InstantiateCoSimulation(
     // and fmi3IntermediateUpdateCallback.
 
     
-    StartZenohSession();
+    try {
+        StartZenohSession();
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to start Zenoh Session - " << e.what() << std::endl;
+        return nullptr;
+    }
    
     proto::fmi3InstantiateCoSimulationMessage input;
     proto::fmi3InstanceMessage output;
@@ -310,7 +357,7 @@ fmi3Instance fmi3InstantiateCoSimulation(
     }
     input.set_n_required_intermediate_variables(nRequiredIntermediateVariables);
     
-    QUERY("fmi3InstantiateCoSimulation", input, output, responderId)
+    QUERY_INSTANCE("fmi3InstantiateCoSimulation", input, output, responderId)
 
     std::cout << "Instance: " << output.instance_index() << std::endl;
 
@@ -331,7 +378,12 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     fmi3LockPreemptionCallback     lockPreemption,
     fmi3UnlockPreemptionCallback   unlockPreemption) {
 
-    StartZenohSession();
+    try {
+        StartZenohSession();
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to start Zenoh Session - " << e.what() << std::endl;
+        return nullptr;
+    }
 
     proto::fmi3InstantiateScheduledExecutionMessage input;
     proto::fmi3InstanceMessage output;
@@ -343,7 +395,7 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     input.set_logging_on(loggingOn);
     // TODO: implement functionality for instanceEnvironment, clockUpdate, lockPeemption, and unlockPreemption
 
-    QUERY("fmi3InstantiateScheduledExecution", input, output, responderId)
+    QUERY_INSTANCE("fmi3InstantiateScheduledExecution", input, output, responderId)
 
     std::cout << "Instance: " << output.instance_index() << std::endl;
 
@@ -358,7 +410,7 @@ void fmi3FreeInstance(fmi3Instance instance) {
 
     SET_INSTANCE(input, instance)
 
-    QUERY("fmi3FreeInstance", input, output, responderId)
+    QUERY_VOID("fmi3FreeInstance", input, output, responderId)
 
     delete placeholder;
 

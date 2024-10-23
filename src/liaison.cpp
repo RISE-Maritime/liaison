@@ -5,6 +5,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 #endif
+#include <vector>
 #include <sys/stat.h>
 #include <unordered_map>
 #include <filesystem>
@@ -59,16 +60,16 @@ void fmi3Get##TYPE(const zenoh::Query& query) { \
     proto::fmi3Get##TYPE##InputMessage input; \
     PARSE_QUERY(query, input) \
 \
-    fmi3ValueReference value_references[input.n_value_references()]; \
+    std::vector<fmi3ValueReference> value_references(input.n_value_references()); \
     for (int i = 0; i < input.n_value_references(); i++) { \
         value_references[i] = input.value_references()[i]; \
     } \
-    fmi3##TYPE values[input.n_value_references()]; \
+    fmi3##TYPE* values = new fmi3##TYPE[input.n_value_references()]; \
     size_t nValues = input.n_value_references(); \
 \
     fmi3Status status = fmu::fmi3Get##TYPE( \
         getInstance(input.instance_index()), \
-        value_references, \
+        value_references.data(), \
         input.n_value_references(), \
         values, \
         nValues \
