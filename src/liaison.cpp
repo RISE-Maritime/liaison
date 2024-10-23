@@ -447,11 +447,11 @@ namespace callbacks {
         
         PARSE_QUERY(query, input)
 
-        fmi3ValueReference value_references[input.n_value_references()];
+        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];    
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
         }
-        fmi3String values[input.n_value_references()];
+        fmi3String* values = new fmi3String[input.n_value_references()];
         for (int i = 0; i < input.n_value_references(); i++) {
             values[i] = input.values()[i].c_str();
         }
@@ -475,9 +475,8 @@ namespace callbacks {
         proto::fmi3SetClockInputMessage input;
         
         PARSE_QUERY(query, input)
-
-        fmi3ValueReference value_references[input.n_value_references()];
-        fmi3Clock values[input.n_value_references()];
+        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];    
+        fmi3Clock* values = new fmi3Clock[input.n_value_references()];
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
             values[i] = input.values()[i];
@@ -500,11 +499,11 @@ namespace callbacks {
         proto::fmi3GetClockInputMessage input;
         PARSE_QUERY(query, input)
 
-        fmi3ValueReference value_references[input.n_value_references()];
+        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
         }
-        fmi3Clock values[input.n_value_references()];
+        fmi3Clock* values = new fmi3Clock[input.n_value_references()];
         size_t nValues = input.n_value_references();
 
         fmi3Status status = fmu::fmi3GetClock(
@@ -533,8 +532,8 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         size_t nValueReferences = input.n_value_references();
-        fmi3ValueReference value_references[nValueReferences];
-        size_t value_sizes[nValueReferences];
+        fmi3ValueReference* value_references = new fmi3ValueReference[nValueReferences];
+        size_t* value_sizes = new size_t[nValueReferences];
         std::vector<uint8_t> values;
 
         size_t offset = 0;
@@ -565,9 +564,9 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         size_t nValueReferences = input.n_value_references();
-        fmi3ValueReference value_references[nValueReferences];
-        size_t value_sizes[nValueReferences];
-        fmi3Binary values[nValueReferences * MAX_BINARY_SIZE]; // Assuming MAX_BINARY_SIZE is defined
+        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];
+        size_t* value_sizes = new size_t[nValueReferences];
+        fmi3Binary* values = new fmi3Binary[nValueReferences * MAX_BINARY_SIZE]; // Assuming MAX_BINARY_SIZE is defined
         size_t n_value;
 
         for (size_t i = 0; i < nValueReferences; ++i) {
