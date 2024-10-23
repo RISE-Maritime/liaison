@@ -14,6 +14,24 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON) 
 
+# Ensure static libraries are used
+set(BUILD_SHARED_LIBS OFF)
+
+# Set static runtime library for MSVC
+if (MSVC)
+    foreach(flag_var
+            CMAKE_C_FLAGS
+            CMAKE_C_FLAGS_DEBUG
+            CMAKE_C_FLAGS_RELEASE
+            CMAKE_CXX_FLAGS
+            CMAKE_CXX_FLAGS_DEBUG
+            CMAKE_CXX_FLAGS_RELEASE)
+        if(${flag_var} MATCHES "/MD")
+            string(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
+        endif()
+    endforeach()
+endif()
+
 # Include Zenoh-c and Zenoh-cpp (find static libraries)
 find_package(zenohc REQUIRED STATIC)
 find_package(zenohcxx REQUIRED STATIC)
@@ -36,11 +54,6 @@ endif()
 include_directories(${libzip_INCLUDE_DIRS})
 include_directories(${zlib_INCLUDE_DIRS})
 
-# Set static runtime libraries for MSVC
-if (MSVC)
-    set(CMAKE_CXX_FLAGS_RELEASE "/MT")
-    set(CMAKE_C_FLAGS_RELEASE "/MT")
-endif()
 
 # Include directories with header files
 include_directories(
