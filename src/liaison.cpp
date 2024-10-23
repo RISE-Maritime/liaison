@@ -60,7 +60,7 @@ void fmi3Get##TYPE(const zenoh::Query& query) { \
     proto::fmi3Get##TYPE##InputMessage input; \
     PARSE_QUERY(query, input) \
 \
-    std::vector<fmi3ValueReference> value_references(input.n_value_references()); \
+    fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()]; \
     for (int i = 0; i < input.n_value_references(); i++) { \
         value_references[i] = input.value_references()[i]; \
     } \
@@ -69,7 +69,7 @@ void fmi3Get##TYPE(const zenoh::Query& query) { \
 \
     fmi3Status status = fmu::fmi3Get##TYPE( \
         getInstance(input.instance_index()), \
-        value_references.data(), \
+        value_references, \
         input.n_value_references(), \
         values, \
         nValues \
@@ -92,11 +92,11 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
     proto::fmi3Set##TYPE##InputMessage input; \
     PARSE_QUERY(query, input); \
 \
-    fmi3ValueReference value_references[input.n_value_references()]; \
+    fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()]; \
     for (int i = 0; i < input.n_value_references(); i++) { \
         value_references[i] = input.value_references()[i]; \
     } \
-    fmi3##TYPE values[input.n_value_references()]; \
+    fmi3##TYPE* values = new fmi3##TYPE[input.n_value_references()]; \
     for (int i = 0; i < input.n_value_references(); i++) { \
         values[i] = input.values()[i]; \
     } \
