@@ -32,7 +32,7 @@ find_package(Protobuf REQUIRED STATIC)
 # Include libzip and zlib
 if (WIN32)
     find_package(libzip CONFIG REQUIRED)
-    find_package(zlib REQUIRED)
+    find_package(ZLIB REQUIRED)
 else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(libzip REQUIRED libzip)
@@ -56,8 +56,8 @@ if (WIN32)
     target_link_libraries(liaison PRIVATE
         zenohcxx::zenohc
         protobuf::libprotobuf
-        libzip::libzip
-        zlib::zlib
+        libzip::zip
+        ZLIB::ZLIB
     )
 else()
     target_link_libraries(liaison PRIVATE
