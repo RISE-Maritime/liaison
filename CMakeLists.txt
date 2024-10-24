@@ -56,7 +56,7 @@ if (WIN32)
     target_link_libraries(liaison PRIVATE
         zenohcxx::zenohc
         protobuf::libprotobuf
-        zip::zip
+        libzip::libzip
         zlib::zlib
     )
 else()
