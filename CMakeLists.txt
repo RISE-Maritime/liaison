@@ -84,6 +84,20 @@ set_target_properties(liaisonfmu PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
     ARCHIVE_OUTPUT_DIRECTORY ${LIAISON_OUTPUT_DIR}
 )
+# List of configurations
+set(CONFIGURATIONS Debug Release RelWithDebInfo MinSizeRel)
+
+# Set output directories for each configuration
+foreach(CONFIGURATION ${CONFIGURATIONS})
+    set(CONFIGURATION_UPPER ${CONFIGURATION})
+    string(TOUPPER ${CONFIGURATION_UPPER} CONFIGURATION_UPPER)
+    set_target_properties(liaisonfmu PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY_${CONFIGURATION_UPPER} "${LIAISON_OUTPUT_DIR}"
+        LIBRARY_OUTPUT_DIRECTORY_${CONFIGURATION_UPPER} "${LIAISON_OUTPUT_DIR}"
+        ARCHIVE_OUTPUT_DIRECTORY_${CONFIGURATION_UPPER} "${LIAISON_OUTPUT_DIR}"
+    )
+endforeach()
+
 target_link_libraries(liaisonfmu PRIVATE
     zenohcxx::zenohc
     protobuf::libprotobuf
