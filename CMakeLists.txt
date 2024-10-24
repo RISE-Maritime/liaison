@@ -26,11 +26,8 @@ endif()
 find_package(zenohc REQUIRED STATIC)
 find_package(zenohcxx REQUIRED STATIC)
 
-# set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
-
 # Include Protobuf
 find_package(Protobuf REQUIRED STATIC)
-include_directories(${PROTOBUF_INCLUDE_DIRS})
 
 # Include libzip and zlib
 if (WIN32)
@@ -40,20 +37,15 @@ else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(libzip REQUIRED libzip)
     pkg_check_modules(zlib REQUIRED zlib)
+    include_directories(${libzip_INCLUDE_DIRS})
+    include_directories(${zlib_INCLUDE_DIRS})
 endif()
-include_directories(${libzip_INCLUDE_DIRS})
-include_directories(${zlib_INCLUDE_DIRS})
-
 
 # Include directories with header files
 include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}                   # For generated protobuf files
     ${CMAKE_CURRENT_SOURCE_DIR}/external/fmi3   # For FMI headers
 )
-
-message(STATUS "libzip include dirs: ${libzip_INCLUDE_DIRS}")
-message(STATUS "zlib include dirs: ${libzip_INCLUDE_DIRS}")
-message(STATUS "Protobuf include dirs: ${PROTOBUF_INCLUDE_DIRS}")
 
 # Generate protobuf files
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS src/fmi3.proto)
@@ -63,14 +55,14 @@ add_executable(liaison src/liaison.cpp src/utils.cpp ${PROTO_SRCS} ${PROTO_HDRS}
 if (WIN32)
     target_link_libraries(liaison PRIVATE
         zenohcxx::zenohc
-        ${Protobuf_LIBRARIES}
-        ${libzip_LIBRARIES}
-        ${zlib_LIBRARIES}
+        protobuf::libprotobuf
+        zip::zip
+        zlib::zlib
     )
 else()
     target_link_libraries(liaison PRIVATE
         zenohcxx::zenohc
-        ${Protobuf_LIBRARIES}
+        protobuf::libprotobuf
         ${libzip_LIBRARIES}
         ${zlib_LIBRARIES}
         -static-libgcc
@@ -94,5 +86,5 @@ set_target_properties(liaisonfmu PROPERTIES
 )
 target_link_libraries(liaisonfmu PRIVATE
     zenohcxx::zenohc
-    ${Protobuf_LIBRARIES}
+    protobuf::libprotobuf
 )
