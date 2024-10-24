@@ -127,6 +127,15 @@ jobs:
           name: windows-artifacts
           path: artifacts/windows
 
+      - name: Debug Artifacts
+        run: |
+          echo "Listing artifacts directory:"
+          ls -la artifacts/
+          echo "Listing Linux artifacts:"
+          ls -la artifacts/linux/
+          echo "Listing Windows artifacts:"
+          ls -la artifacts/windows/
+
       # Create liaison-linux package
       - name: Create liaison-linux package
         run: |
