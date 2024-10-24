@@ -3,10 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - main
-    tags:
-      - v*
-  workflow_dispatch:
+      - feature/compile_windows
 
 jobs:
   build_linux:
