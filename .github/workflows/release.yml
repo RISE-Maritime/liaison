@@ -3,7 +3,10 @@ name: Release
 on:
   push:
     branches:
-      - feature/compile_windows
+      - main
+    tags:
+      - v*
+  workflow_dispatch:
 
 jobs:
   build_linux:
@@ -32,10 +35,13 @@ jobs:
           ls -la /
           ls -la build/
 
-      - name: Upload Release Asset (Linux)
-        uses: softprops/action-gh-release@v2
+      - name: Upload Build Artifacts (Linux)
+        uses: actions/upload-artifact@v3
         with:
-          files: build/liaison
+          name: linux-artifacts
+          path: |
+            build/liaison
+            build/binaries/x86_64-linux-gnu/libliaisonfmu.so
 
   build_windows:
     name: Build on Windows
@@ -90,3 +96,87 @@ jobs:
         run: |
           echo "Listing build directory:"
           dir build
+          dir build\binaries\x86_64-windows
+
+      - name: Upload Build Artifacts (Windows)
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-artifacts
+          path: |
+            build/liaison.exe
+            build/binaries/x86_64-windows/libliaisonfmu.dll
+
+  package:
+    name: Package Artifacts
+    needs:
+      - build_linux
+      - build_windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Download artifacts from both builds
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: linux-artifacts
+          path: artifacts/linux
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: windows-artifacts
+          path: artifacts/windows
+
+      # Create liaison-linux package
+      - name: Create liaison-linux package
+        run: |
+          mkdir -p package-linux/binaries
+          cp artifacts/linux/build/liaison package-linux/
+          cp artifacts/linux/build/binaries/* package-linux/binaries/
+          cp artifacts/windows/build/binaries/* package-linux/binaries/
+          tar -czvf liaison-linux.tar.gz -C package-linux .
+
+      # Create liaison-windows package
+      - name: Create liaison-windows package
+        run: |
+          mkdir -p package-windows/binaries
+          cp artifacts/windows/build/liaison package-windows/
+          cp artifacts/windows/build/binaries/* package-windows/binaries/
+          cp artifacts/windows/build/binaries/* package-windows/binaries/
+          tar -czvf liaison-windows.tar.gz -C package-windows .
+
+      # Upload the packaged artifacts
+      - name: Upload Packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: liaison-packages
+          path: |
+            liaison-linux.tar.gz
+            liaison-windows.zip
+
+  release:
+    name: Create Release
+    needs:
+      - package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download Packages
+        uses: actions/download-artifact@v2
+        with:
+          name: liaison-packages
+          path: packages
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: packages/*
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
