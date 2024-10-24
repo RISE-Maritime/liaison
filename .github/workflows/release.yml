@@ -37,7 +37,7 @@ jobs:
           name: linux-artifacts
           path: |
             build/liaison
-            build/binaries/x86_64-linux-gnu/libliaisonfmu.so
+            build/binaries
 
   build_windows:
     name: Build on Windows
@@ -99,8 +99,8 @@ jobs:
         with:
           name: windows-artifacts
           path: |
-            build/liaison.exe
-            build/binaries/x86_64-windows/libliaisonfmu.dll
+            build\liaison.exe
+            build\binaries
 
   package:
     name: Package Artifacts
