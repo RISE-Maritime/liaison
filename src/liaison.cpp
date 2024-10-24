@@ -790,11 +790,18 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
         return;
     }
 
-    // Add the renamed DLL file to the FMU inside the binaries/platform directory
-    std::string originalDllPath ="./binaries/x86_64-linux/libliaisonfmu.so";
-    std::string renamedDllPath = "binaries/x86_64-linux/" + modelName + ".so";    
-    if (!addFileToZip(fmu, originalDllPath, renamedDllPath)) {
-        std::cerr << "Error adding Liaison Dynamic Library file to FMU." << std::endl;
+    // Add the renamed DLL files to the FMU inside the binaries/platform directory
+    std::string originalLinuxDynamicLibraryPath ="./binaries/x86_64-linux/libliaisonfmu.so";
+    std::string renamedLinuxDynamicLibraryPath = "binaries/x86_64-linux/" + modelName + ".so";    
+    if (!addFileToZip(fmu, originalLinuxDynamicLibraryPath, renamedLinuxDynamicLibraryPath)) {
+        std::cerr << "Error adding Liaison Linux dynamic library file to FMU." << std::endl;
+        zip_discard(fmu);
+        return;
+    }
+    std::string originalWindowsDynamicLibraryPath ="./binaries/x86_64-windows/liaisonfmu.dll";
+    std::string renamedWindowsDynamicLibraryPath = "binaries/x86_64-windows/" + modelName + ".dll";    
+    if (!addFileToZip(fmu, originalWindowsDynamicLibraryPath, renamedWindowsDynamicLibraryPath)) {
+        std::cerr << "Error adding Liaison Windows dynamic library file to FMU." << std::endl;
         zip_discard(fmu);
         return;
     }
