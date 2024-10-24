@@ -92,6 +92,7 @@ jobs:
         run: |
           echo "Listing build directory:"
           dir build
+          dir build\Release
           dir build\binaries\x86_64-windows
 
       - name: Upload Build Artifacts (Windows)
@@ -99,7 +100,7 @@ jobs:
         with:
           name: windows-artifacts
           path: |
-            build\liaison.exe
+            build\Release\liaison.exe
             build\binaries
 
   package:
@@ -130,18 +131,18 @@ jobs:
       - name: Create liaison-linux package
         run: |
           mkdir -p package-linux/binaries
-          cp artifacts/linux/build/liaison package-linux/
-          cp artifacts/linux/build/binaries/* package-linux/binaries/
-          cp artifacts/windows/build/binaries/* package-linux/binaries/
+          cp artifacts/linux/liaison package-linux/
+          cp artifacts/linux/binaries/* package-linux/binaries/
+          cp artifacts/windows/binaries/* package-linux/binaries/
           tar -czvf liaison-linux.tar.gz -C package-linux .
 
       # Create liaison-windows package
       - name: Create liaison-windows package
         run: |
           mkdir -p package-windows/binaries
-          cp artifacts/windows/build/liaison package-windows/
-          cp artifacts/windows/build/binaries/* package-windows/binaries/
-          cp artifacts/windows/build/binaries/* package-windows/binaries/
+          cp artifacts/windows/liaison package-windows/
+          cp artifacts/windows/binaries/* package-windows/binaries/
+          cp artifacts/windows/binaries/* package-windows/binaries/
           tar -czvf liaison-windows.tar.gz -C package-windows .
 
       # Upload the packaged artifacts
