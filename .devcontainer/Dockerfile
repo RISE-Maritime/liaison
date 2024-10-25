@@ -5,7 +5,7 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ZENOH_VERSION=1.0.0
 ENV PROTOBUF_VERSION=3.20.1
-ENV LIBZIP_VERSION=1.11.1
+ENV LIBZIP_VERSION=1.10.1
 
 # Install required packages
 RUN apt-get update && apt-get install -y \
