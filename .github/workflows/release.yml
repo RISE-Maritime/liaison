@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - feature/compile_windows
-   
+
 env:
   ZENOH_VERSION: "1.0.0"
 
