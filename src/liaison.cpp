@@ -1,5 +1,11 @@
-#include <dlfcn.h> 
+#ifdef _WIN32
+#include <windows.h>
+#undef ERROR
+#else
+#include <dlfcn.h>
 #include <unistd.h>
+#endif
+#include <vector>
 #include <sys/stat.h>
 #include <unordered_map>
 #include <filesystem>
@@ -15,6 +21,8 @@
 // MACROS
 
 #define MAX_BINARY_SIZE 4096
+
+
 
 #define DECLARE_QUERYABLE(FMI3FUNCTION, RESPONDER_ID) \
     std::string expr_##FMI3FUNCTION = "rpc/" + RESPONDER_ID + "/" + std::string(#FMI3FUNCTION); \
@@ -35,9 +43,15 @@
     auto output_payload = zenoh::Bytes(std::move(output_wire)); \
     QUERY.reply(QUERY.get_keyexpr(), std::move(output_payload)); \
 
-
+// Platform-specific loading/unloading of libraries and symbol resolution
+#ifdef _WIN32
+#define BIND_FMU_LIBRARY_FUNCTION(FMI3FUNCTION) \
+    fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)GetProcAddress(fmuLibrary, #FMI3FUNCTION);
+#else
 #define BIND_FMU_LIBRARY_FUNCTION(FMI3FUNCTION) \
     fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)dlsym(fmuLibrary, #FMI3FUNCTION);
+#endif
+
 
 #define DEFINE_FMI3_GET_VALUE_FUNCTION(TYPE) \
 void fmi3Get##TYPE(const zenoh::Query& query) { \
@@ -46,11 +60,11 @@ void fmi3Get##TYPE(const zenoh::Query& query) { \
     proto::fmi3Get##TYPE##InputMessage input; \
     PARSE_QUERY(query, input) \
 \
-    fmi3ValueReference value_references[input.n_value_references()]; \
+    fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()]; \
     for (int i = 0; i < input.n_value_references(); i++) { \
         value_references[i] = input.value_references()[i]; \
     } \
-    fmi3##TYPE values[input.n_value_references()]; \
+    fmi3##TYPE* values = new fmi3##TYPE[input.n_value_references()]; \
     size_t nValues = input.n_value_references(); \
 \
     fmi3Status status = fmu::fmi3Get##TYPE( \
@@ -78,11 +92,11 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
     proto::fmi3Set##TYPE##InputMessage input; \
     PARSE_QUERY(query, input); \
 \
-    fmi3ValueReference value_references[input.n_value_references()]; \
+    fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()]; \
     for (int i = 0; i < input.n_value_references(); i++) { \
         value_references[i] = input.value_references()[i]; \
     } \
-    fmi3##TYPE values[input.n_value_references()]; \
+    fmi3##TYPE* values = new fmi3##TYPE[input.n_value_references()]; \
     for (int i = 0; i < input.n_value_references(); i++) { \
         values[i] = input.values()[i]; \
     } \
@@ -100,6 +114,48 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
 }
 
 // end of MACROS
+
+// Function to load and unload FMU library (platform-specific)
+#ifdef _WIN32
+HMODULE loadFmuLibrary(const std::string& libPath) {
+    HMODULE handle = LoadLibrary(libPath.c_str());
+    if (!handle) {
+        DWORD errorCode = GetLastError();
+        LPVOID errorMsg;
+        FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            errorCode,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPSTR)&errorMsg,
+            0,
+            NULL
+        );
+        std::ostringstream oss;
+        oss << "Failed to load FMU library: " << libPath << " Error: " << (LPSTR)errorMsg;
+        LocalFree(errorMsg);
+        throw std::runtime_error(oss.str());
+    }
+    return handle;
+}
+
+void unloadFmuLibrary(HMODULE handle) {
+    FreeLibrary(handle);
+}
+#else
+void* loadFmuLibrary(const std::string& libPath) {
+    void* handle = dlopen(libPath.c_str(), RTLD_LAZY);
+    if (!handle) {
+        throw std::runtime_error("Failed to load FMU library: " + std::string(dlerror()));
+    }
+    return handle;
+}
+
+void unloadFmuLibrary(void* handle) {
+    dlclose(handle);
+}
+#endif
+
 
 // Map that holds the FMU instances
 std::unordered_map<int, fmi3Instance> instances;
@@ -405,11 +461,11 @@ namespace callbacks {
         
         PARSE_QUERY(query, input)
 
-        fmi3ValueReference value_references[input.n_value_references()];
+        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];    
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
         }
-        fmi3String values[input.n_value_references()];
+        fmi3String* values = new fmi3String[input.n_value_references()];
         for (int i = 0; i < input.n_value_references(); i++) {
             values[i] = input.values()[i].c_str();
         }
@@ -433,9 +489,8 @@ namespace callbacks {
         proto::fmi3SetClockInputMessage input;
         
         PARSE_QUERY(query, input)
-
-        fmi3ValueReference value_references[input.n_value_references()];
-        fmi3Clock values[input.n_value_references()];
+        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];    
+        fmi3Clock* values = new fmi3Clock[input.n_value_references()];
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
             values[i] = input.values()[i];
@@ -458,11 +513,11 @@ namespace callbacks {
         proto::fmi3GetClockInputMessage input;
         PARSE_QUERY(query, input)
 
-        fmi3ValueReference value_references[input.n_value_references()];
+        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
         }
-        fmi3Clock values[input.n_value_references()];
+        fmi3Clock* values = new fmi3Clock[input.n_value_references()];
         size_t nValues = input.n_value_references();
 
         fmi3Status status = fmu::fmi3GetClock(
@@ -491,8 +546,8 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         size_t nValueReferences = input.n_value_references();
-        fmi3ValueReference value_references[nValueReferences];
-        size_t value_sizes[nValueReferences];
+        fmi3ValueReference* value_references = new fmi3ValueReference[nValueReferences];
+        size_t* value_sizes = new size_t[nValueReferences];
         std::vector<uint8_t> values;
 
         size_t offset = 0;
@@ -523,10 +578,10 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         size_t nValueReferences = input.n_value_references();
-        fmi3ValueReference value_references[nValueReferences];
-        size_t value_sizes[nValueReferences];
-        fmi3Binary values[nValueReferences * MAX_BINARY_SIZE]; // Assuming MAX_BINARY_SIZE is defined
-        size_t n_value;
+        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];
+        size_t* value_sizes = new size_t[nValueReferences];
+        fmi3Binary* values = new fmi3Binary[nValueReferences * MAX_BINARY_SIZE]; // Assuming MAX_BINARY_SIZE is defined
+        size_t n_value = 0;
 
         for (size_t i = 0; i < nValueReferences; ++i) {
             value_references[i] = input.value_references()[i];
@@ -581,6 +636,13 @@ namespace callbacks {
 
 }
 
+std::string constructLibraryPath(const std::string& tempPath, const std::string& modelName) {
+#ifdef _WIN32
+    return tempPath + "/binaries/win64/" + modelName + ".dll";
+#else
+    return tempPath + "/binaries/x86_64-linux/" + modelName + ".so";
+#endif
+}
 
 int startServer(const std::string& fmuPath, const std::string& responderId) {
     std::cout << "Starting server using:" << std::endl;
@@ -591,11 +653,10 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     std::filesystem::path fmuFilePath(fmuPath);
     std::string modelName = fmuFilePath.stem().string();
     std::string tempPath = unzipFmu(fmuPath);
-    std::string libPath = tempPath + "/binaries/x86_64-linux/" + modelName + ".so";
-    void* fmuLibrary = dlopen(libPath.c_str(), RTLD_LAZY);
-    if (!fmuLibrary) {
-        throw std::runtime_error("Failed to load FMU library: " + std::string(dlerror()));
-    }
+    std::string libPath = constructLibraryPath(tempPath, modelName);
+    
+    // Load the FMU library dynamically
+    auto fmuLibrary = loadFmuLibrary(libPath);
 
     // Bind FMU library functions
     BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateCoSimulation)
@@ -685,9 +746,16 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     while (c != 'q') {
         c = getchar();
         if (c == -1) {
-            usleep(1);
+#ifdef _WIN32
+        Sleep(100);
+#else
+        usleep(100000); 
+#endif
         }
     }
+
+    // Unload the FMU library before exiting
+    unloadFmuLibrary(fmuLibrary);
 
     return 0;
 }
@@ -707,7 +775,7 @@ std::string createResponderIdFile(const std::string& directory, const std::strin
     if (!std::filesystem::exists(filePath)) {
         throw std::runtime_error("responderId file creation failed at: " + filePath.string());
     }
-    return filePath;
+    return filePath.string();
 }
 
 void generateFmu(const std::string& fmuPath, const std::string& responderId) {
@@ -736,11 +804,18 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
         return;
     }
 
-    // Add the renamed DLL file to the FMU inside the binaries/platform directory
-    std::string originalDllPath ="./binaries/x86_64-linux/libliaisonfmu.so";
-    std::string renamedDllPath = "binaries/x86_64-linux/" + modelName + ".so";    
-    if (!addFileToZip(fmu, originalDllPath, renamedDllPath)) {
-        std::cerr << "Error adding Liaison Dynamic Library file to FMU." << std::endl;
+    // Add the renamed DLL files to the FMU inside the binaries/platform directory
+    std::string originalLinuxDynamicLibraryPath ="./binaries/x86_64-linux/libliaisonfmu.so";
+    std::string renamedLinuxDynamicLibraryPath = "binaries/x86_64-linux/" + modelName + ".so";    
+    if (!addFileToZip(fmu, originalLinuxDynamicLibraryPath, renamedLinuxDynamicLibraryPath)) {
+        std::cerr << "Error adding Liaison Linux dynamic library file to FMU." << std::endl;
+        zip_discard(fmu);
+        return;
+    }
+    std::string originalWindowsDynamicLibraryPath ="./binaries/x86_64-windows/liaisonfmu.dll";
+    std::string renamedWindowsDynamicLibraryPath = "binaries/x86_64-windows/" + modelName + ".dll";    
+    if (!addFileToZip(fmu, originalWindowsDynamicLibraryPath, renamedWindowsDynamicLibraryPath)) {
+        std::cerr << "Error adding Liaison Windows dynamic library file to FMU." << std::endl;
         zip_discard(fmu);
         return;
     }

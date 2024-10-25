@@ -1,11 +1,15 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
+    tags:
+      - v*
 
 jobs:
-  build:
+  build_linux:
+    name: Build on Linux
     runs-on: ubuntu-latest
 
     steps:
@@ -17,20 +21,170 @@ jobs:
 
       - name: Build and tag DevContainer image
         run: |
-          docker build -t my-devcontainer-image .devcontainer
+          docker build -t linux-container-image -f .devcontainer/Dockerfile .
 
       - name: Run DevContainer and build project
         run: |
-          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace my-devcontainer-image \
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace linux-container-image \
           bash -c "mkdir -p build && cd build && cmake .. && make"
+
+      - name: Debug Build Output (Linux)
+        run: |
+          echo "Listing build directory:"
+          ls -la build/
+
+      - name: Upload Build Artifacts (Linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            build/liaison
+            build/binaries
+
+  build_windows:
+    name: Build on Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Cache vcpkg
+        uses: actions/cache@v3
+        with:
+          path: C:/vcpkg
+          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-
+
+      - name: Install dependencies
+        run: |
+          choco install -y cmake make openssl
+
+      - name: Install protobuf, zlib and libzip
+        run: |
+          Get-Command vcpkg
+          vcpkg install protobuf:x64-windows-static 
+          vcpkg install zlib:x64-windows-static
+          vcpkg install libzip:x64-windows-static
+
+      - name: Build and install Zenoh-c
+        run: |
+          git clone https://github.com/eclipse-zenoh/zenoh-c.git
+          mkdir zenoh-c/build
+          cd zenoh-c/build
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE
+          cmake --build . --config Release --target install
+
+      - name: Build and install Zenoh-cpp
+        run: |
+          git clone https://github.com/eclipse-zenoh/zenoh-cpp.git
+          mkdir zenoh-cpp/build
+          cd zenoh-cpp/build
+          cmake ../ -DBUILD_SHARED_LIBS=FALSE
+          cmake --build . --config Release --target install
+
+      - name: Build Liaison
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release
+
       - name: Debug Build Output
         run: |
           echo "Listing build directory:"
-          ls -la /
-          ls -la build/
-          
+          dir build
+          dir build\Release
+          dir build\binaries\x86_64-windows
 
-      - name: Upload Release Asset
+      - name: Upload Build Artifacts (Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            build\Release\liaison.exe
+            build\binaries
+
+  package:
+    name: Package Artifacts
+    needs:
+      - build_linux
+      - build_windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Download artifacts from both builds
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts
+          path: artifacts/linux
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: artifacts/windows
+
+      - name: Debug Artifacts
+        run: |
+          echo "Listing artifacts directory:"
+          ls -la artifacts/
+          echo "Listing Linux artifacts:"
+          ls -la artifacts/linux/
+          echo "Listing Windows artifacts:"
+          ls -la artifacts/windows/
+
+      # Create liaison-linux package
+      - name: Create liaison-linux package
+        run: |
+          mkdir -p package-linux/binaries
+          cp artifacts/linux/liaison package-linux/
+          cp -r artifacts/linux/binaries/* package-linux/binaries/
+          cp -r artifacts/windows/binaries/* package-linux/binaries/
+          tar -czvf liaison-linux.tar.gz -C package-linux .
+
+      # Create liaison-windows package
+      - name: Create liaison-windows package
+        run: |
+          mkdir -p package-windows/binaries
+          cp artifacts/windows/Release/liaison.exe package-windows/
+          cp -r artifacts/linux/binaries/* package-windows/binaries/
+          cp -r artifacts/windows/binaries/* package-windows/binaries/
+          tar -czvf liaison-windows.tar.gz -C package-windows .
+
+      # Upload the packaged artifacts
+      - name: Upload Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: liaison-packages
+          path: |
+            liaison-linux.tar.gz
+            liaison-windows.zip
+
+  release:
+    name: Create Release
+    needs:
+      - package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download Packages
+        uses: actions/download-artifact@v4
+        with:
+          name: liaison-packages
+          path: packages
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/liaison
+          files: packages/*
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

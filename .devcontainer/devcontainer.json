@@ -1,19 +1,13 @@
-
 {
-	"name": "liaison",
-	"build": {
-		"dockerfile": "DockerfileLinux"
-	},
-	"remoteUser":"root",
-	"mounts": [
-		"source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind"
-	],
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"ms-vscode.cmake-tools", 
-				"ms-vscode.cpptools"
-			]	 
-		}
-	}
+  "name": "liaison",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "root",
+  "mounts": ["source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind"],
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-vscode.cmake-tools", "ms-vscode.cpptools"]
+    }
+  }
 }
