@@ -12,9 +12,9 @@ Build all the targets and `cd` to the `build` folder.
 
 ``./liaison --make-fmu ../tests/BouncingBall.fmu fmus/bouncingball``
 
-### Step 2: Run the "Liaison Server"
+### Step 2: Serve the FMU 
 
-``./liaison --server ../tests/BouncingBall.fmu fmus/bouncingball``
+``./liaison --serve ../tests/BouncingBall.fmu fmus/bouncingball``
 
 ### Step 3: Simulat the "Liaison FMU"
 

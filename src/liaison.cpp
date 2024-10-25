@@ -805,17 +805,21 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
     }
 
     // Add the renamed DLL files to the FMU inside the binaries/platform directory
+    size_t nDynamicLibraryErrors = 0;
     std::string originalLinuxDynamicLibraryPath ="./binaries/x86_64-linux/libliaisonfmu.so";
     std::string renamedLinuxDynamicLibraryPath = "binaries/x86_64-linux/" + modelName + ".so";    
     if (!addFileToZip(fmu, originalLinuxDynamicLibraryPath, renamedLinuxDynamicLibraryPath)) {
-        std::cerr << "Error adding Liaison Linux dynamic library file to FMU." << std::endl;
-        zip_discard(fmu);
-        return;
+        std::cerr << "Warning: failed adding Liaison Linux dynamic library file to FMU." << std::endl;
+        nDynamicLibraryErrors++;
     }
     std::string originalWindowsDynamicLibraryPath ="./binaries/x86_64-windows/liaisonfmu.dll";
     std::string renamedWindowsDynamicLibraryPath = "binaries/x86_64-windows/" + modelName + ".dll";    
     if (!addFileToZip(fmu, originalWindowsDynamicLibraryPath, renamedWindowsDynamicLibraryPath)) {
-        std::cerr << "Error adding Liaison Windows dynamic library file to FMU." << std::endl;
+        std::cerr << "Warning: failed adding Liaison Windows dynamic library file to FMU." << std::endl;
+        nDynamicLibraryErrors++;
+    }
+    if (nDynamicLibraryErrors == 2) {
+        std::cerr << "Fatal Error: Failed to add a single Liaison dynamic library file to the Liaison FMU." << std::endl;
         zip_discard(fmu);
         return;
     }
@@ -848,7 +852,7 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
 
 void printUsage() {
     std::cout << "Usage:\n";
-    std::cout << "  liaison --server <Path to FMU> <Responder Id>\n";
+    std::cout << "  liaison --serve <Path to FMU> <Responder Id>\n";
     std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id>\n";
 }
 
@@ -864,7 +868,7 @@ int main(int argc, char* argv[]) {
     std::string responderId = argv[3];
 
     try {
-        if (option == "--server") {
+        if (option == "--serve") {
             startServer(fmuPath, responderId);
         } else if (option == "--make-fmu") {
             generateFmu(fmuPath, responderId);
