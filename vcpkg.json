@@ -14,6 +14,5 @@
       "name": "zlib",
       "default-features": true
     }
-  ],
-  "builtin-baseline": "ba2d60fa1e614b230f7b8af28d4f4c4c160625d6"
+  ]
 }
