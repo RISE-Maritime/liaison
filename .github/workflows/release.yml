@@ -26,7 +26,11 @@ jobs:
 
       - name: Run DevContainer and build project
         run: |
-          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace linux-container-image \
+          docker run --rm \ 
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          --user developer \
+          linux-container-image \
           bash -c "mkdir -p build && cd build && cmake .. && make"
 
       - name: Debug Build Output (Linux)
@@ -75,7 +79,6 @@ jobs:
         run: |
           Get-Command vcpkg
           $env:VCPKG_FEATURE_FLAGS="manifest"
-          vcpkg x-update-baseline --add-initial-baseline 
           vcpkg install --triplet x64-windows-static
           # vcpkg install protobuf:x64-windows-static 
           # vcpkg install zlib:x64-windows-static
