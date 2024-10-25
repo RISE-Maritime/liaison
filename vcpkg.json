@@ -12,7 +12,8 @@
     },
     {
       "name": "zlib",
-      "default-features": true
+      "version>=": "3.20.1"
     }
-  ]
+  ],
+  "builtin-baseline": "b171feebd4f8b7943b56356f9ec1d4dbe44ab82f"
 }

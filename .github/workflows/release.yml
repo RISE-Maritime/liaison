@@ -75,6 +75,7 @@ jobs:
         run: |
           Get-Command vcpkg
           $env:VCPKG_FEATURE_FLAGS="manifest"
+          vcpkg x-update-baseline --add-initial-baseline 
           vcpkg install --triplet x64-windows-static
           # vcpkg install protobuf:x64-windows-static 
           # vcpkg install zlib:x64-windows-static
