@@ -141,17 +141,17 @@ jobs:
         run: |
           mkdir -p package-linux/binaries
           cp artifacts/linux/liaison package-linux/
-          cp artifacts/linux/binaries/* package-linux/binaries/
-          cp artifacts/windows/binaries/* package-linux/binaries/
+          cp -r artifacts/linux/binaries/* package-linux/binaries/
+          cp -r artifacts/windows/binaries/* package-linux/binaries/
           tar -czvf liaison-linux.tar.gz -C package-linux .
 
       # Create liaison-windows package
       - name: Create liaison-windows package
         run: |
           mkdir -p package-windows/binaries
-          cp artifacts/windows/liaison package-windows/
-          cp artifacts/windows/binaries/* package-windows/binaries/
-          cp artifacts/windows/binaries/* package-windows/binaries/
+          cp artifacts/windows/Release/liaison.exe package-windows/
+          cp -r artifacts/linux/binaries/* package-windows/binaries/
+          cp -r artifacts/windows/binaries/* package-windows/binaries/
           tar -czvf liaison-windows.tar.gz -C package-windows .
 
       # Upload the packaged artifacts
