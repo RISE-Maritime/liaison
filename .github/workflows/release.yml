@@ -54,22 +54,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
 
-      - name: Cache vcpkg artifacts
+      - name: Cache vcpkg
         uses: actions/cache@v3
         with:
-          path: |
-            $(Pipeline.Workspace)/vcpkg/installed
-            $(Pipeline.Workspace)/vcpkg/buildtrees
-            $(Pipeline.Workspace)/vcpkg/packages
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
-
-      # - name: Cache vcpkg
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: C:/vcpkg
-      #     key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-vcpkg-
+          path: C:/vcpkg
+          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-
 
       - name: Install dependencies
         run: |
@@ -78,11 +69,9 @@ jobs:
       - name: Install protobuf, zlib and libzip
         run: |
           Get-Command vcpkg
-          $env:VCPKG_FEATURE_FLAGS="manifest"
-          vcpkg install --triplet x64-windows-static
-          # vcpkg install protobuf:x64-windows-static 
-          # vcpkg install zlib:x64-windows-static
-          # vcpkg install libzip:x64-windows-static
+          vcpkg install protobuf:x64-windows-static 
+          vcpkg install zlib:x64-windows-static
+          vcpkg install libzip:x64-windows-static
 
       - name: Build and install Zenoh-c
         run: |
