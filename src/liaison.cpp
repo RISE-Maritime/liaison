@@ -120,7 +120,21 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
 HMODULE loadFmuLibrary(const std::string& libPath) {
     HMODULE handle = LoadLibrary(libPath.c_str());
     if (!handle) {
-        throw std::runtime_error("Failed to load FMU library: " + std::to_string(GetLastError()));
+        DWORD errorCode = GetLastError();
+        LPVOID errorMsg;
+        FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            errorCode,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPSTR)&errorMsg,
+            0,
+            NULL
+        );
+        std::ostringstream oss;
+        oss << "Failed to load FMU library: " << libPath << " Error: " << (LPSTR)errorMsg;
+        LocalFree(errorMsg);
+        throw std::runtime_error(oss.str());
     }
     return handle;
 }
