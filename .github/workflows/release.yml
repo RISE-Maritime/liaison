@@ -23,7 +23,7 @@ jobs:
 
       - name: Run DevContainer and build project
         run: |
-          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace linux-container-image \
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace -u developer linux-container-image \
           bash -c "mkdir -p build && cd build && cmake .. && make"
 
       - name: Debug Build Output (Linux)
