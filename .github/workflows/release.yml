@@ -26,7 +26,6 @@ jobs:
           docker run --rm \ 
           -v ${{ github.workspace }}:/workspace \
           -w /workspace \
-          --user developer \
           linux-container-image \
           bash -c "mkdir -p build && cd build && cmake .. && make"
 
