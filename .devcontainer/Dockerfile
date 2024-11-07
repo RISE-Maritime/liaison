@@ -1,7 +1,11 @@
 # Use the official Ubuntu 22.04 LTS image
 FROM ubuntu:22.04
+
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
+ENV ZENOH_VERSION=1.0.0
+ENV PROTOBUF_VERSION=3.20.1
+ENV LIBZIP_VERSION=1.10.1
 
 # Install required packages
 RUN apt-get update && apt-get install -y \
@@ -31,25 +35,21 @@ ENV PATH="/root/.cargo/bin:$PATH"
 # Verify Rust and Cargo installation
 RUN rustup --version && cargo --version
 
-# Set working directory
 WORKDIR /workspaces
 
 # Build and install Zenoh-c
-RUN git clone https://github.com/eclipse-zenoh/zenoh-c.git /workspaces/zenoh-c
+RUN git clone --depth 1 --branch ${ZENOH_VERSION} https://github.com/eclipse-zenoh/zenoh-c.git /workspaces/zenoh-c
 WORKDIR /workspaces/zenoh-c/build
 RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=FALSE && \
     cmake --build . --target install
 
-
 # Build and install Zenoh-cpp
-RUN git clone https://github.com/eclipse-zenoh/zenoh-cpp.git /workspaces/zenoh-cpp
+RUN git clone --depth 1 --branch ${ZENOH_VERSION} https://github.com/eclipse-zenoh/zenoh-cpp.git /workspaces/zenoh-cpp
 WORKDIR /workspaces/zenoh-cpp/build
 RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=FALSE && \
     cmake --build . --target install 
-
     
 # Download and build Protobuf from source
-ARG PROTOBUF_VERSION=3.20.1
 RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
     tar -xzf protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
     cd protobuf-${PROTOBUF_VERSION} && \
@@ -58,9 +58,7 @@ RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PR
     make install && \
     ldconfig
 
-
 # Download and build libzip from source
-ENV LIBZIP_VERSION=1.11.1
 RUN wget https://libzip.org/download/libzip-${LIBZIP_VERSION}.tar.gz && \
     tar -xvf libzip-${LIBZIP_VERSION}.tar.gz && \
     cd libzip-${LIBZIP_VERSION} && \
@@ -81,10 +79,13 @@ RUN rm -rf /libzip-${LIBZIP_VERSION} /libzip-${LIBZIP_VERSION}.tar.gz
 # Python and FMPy
 RUN python3 -m pip install fmpy[complete]==0.3.20
 
-# Set working directory back to /workspaces
-WORKDIR /workspaces
+# Create a non-root user 
+ENV USERNAME=developer
+RUN useradd -m $USERNAME
 
-# Copy your project files into the container
+USER ${USERNAME}
+
+# Copy the workspace files to the container
 COPY . /workspaces
 
-CMD ["bash"]
+CMD ["/bin/bash"]
