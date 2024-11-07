@@ -1,11 +1,12 @@
 name: Release
 
 on:
+  release:
+    types:
+      - created
   push:
-    branches:
-      - main
     tags:
-      - v*
+      - "v*.*.*"
 
 jobs:
   build_linux:
@@ -25,7 +26,7 @@ jobs:
 
       - name: Run DevContainer and build project
         run: |
-          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace linux-container-image \
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace -u root linux-container-image \
           bash -c "mkdir -p build && cd build && cmake .. && make"
 
       - name: Debug Build Output (Linux)
@@ -70,7 +71,7 @@ jobs:
 
       - name: Build and install Zenoh-c
         run: |
-          git clone https://github.com/eclipse-zenoh/zenoh-c.git
+          git clone --depth 1 --branch 1.0.0 https://github.com/eclipse-zenoh/zenoh-c.git
           mkdir zenoh-c/build
           cd zenoh-c/build
           cmake ../ -DBUILD_SHARED_LIBS=FALSE
@@ -78,7 +79,7 @@ jobs:
 
       - name: Build and install Zenoh-cpp
         run: |
-          git clone https://github.com/eclipse-zenoh/zenoh-cpp.git
+          git clone --depth 1 --branch 1.0.0 https://github.com/eclipse-zenoh/zenoh-cpp.git
           mkdir zenoh-cpp/build
           cd zenoh-cpp/build
           cmake ../ -DBUILD_SHARED_LIBS=FALSE
