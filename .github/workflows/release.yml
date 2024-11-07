@@ -146,7 +146,7 @@ jobs:
           cp artifacts/linux/liaison package-linux/
           cp -r artifacts/linux/binaries/* package-linux/binaries/
           cp -r artifacts/windows/binaries/* package-linux/binaries/
-          tar -czvf liaison-linux.tar.gz -C package-linux .
+          zip -r liaison-linux.zip package-linux/
 
       # Create liaison-windows package
       - name: Create liaison-windows package
@@ -155,7 +155,7 @@ jobs:
           cp artifacts/windows/Release/liaison.exe package-windows/
           cp -r artifacts/linux/binaries/* package-windows/binaries/
           cp -r artifacts/windows/binaries/* package-windows/binaries/
-          tar -czvf liaison-windows.tar.gz -C package-windows .
+          zip -r liaison-windows.zip package-windows/
 
       # Upload the packaged artifacts
       - name: Upload Packages
@@ -163,7 +163,7 @@ jobs:
         with:
           name: liaison-packages
           path: |
-            liaison-linux.tar.gz
+            liaison-linux.zip
             liaison-windows.zip
 
   release:
