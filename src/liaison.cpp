@@ -638,7 +638,11 @@ namespace callbacks {
 
 std::string constructLibraryPath(const std::string& tempPath, const std::string& modelName) {
 #ifdef _WIN32
-    return tempPath + "/binaries/win64/" + modelName + ".dll";
+    #ifdef _WIN64
+        return tempPath + "/binaries/x86_64-windows/" + modelName + ".dll";
+    #else
+        return tempPath + "/binaries/x86-windows/" + modelName + ".dll";
+    #endif
 #else
     return tempPath + "/binaries/x86_64-linux/" + modelName + ".so";
 #endif
