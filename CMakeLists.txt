@@ -23,11 +23,12 @@ if (MSVC)
 endif()
 
 # Include Zenoh-c and Zenoh-cpp (find static libraries)
-find_package(zenohc REQUIRED STATIC)
-find_package(zenohcxx REQUIRED STATIC)
+find_package(zenohc REQUIRED)
+find_package(zenohcxx REQUIRED)
 
 # Include Protobuf
-find_package(Protobuf REQUIRED STATIC)
+set(Protobuf_USE_STATIC_LIBS ON)
+find_package(Protobuf REQUIRED)
 
 # Include libzip and zlib
 if (WIN32)
