@@ -27,7 +27,7 @@
 #define DECLARE_QUERYABLE(FMI3FUNCTION, RESPONDER_ID) \
     std::string expr_##FMI3FUNCTION = "rpc/" + RESPONDER_ID + "/" + std::string(#FMI3FUNCTION); \
     zenoh::KeyExpr keyexpr_##FMI3FUNCTION(expr_##FMI3FUNCTION); \
-    auto on_drop_queryable_##FMI3FUNCTION = []() { std::cout << "Destroying queryable for " << #FMI3FUNCTION << "\n"; }; \
+    auto on_drop_queryable_##FMI3FUNCTION = []() { if (debug) std::cout << "Destroying queryable for " << #FMI3FUNCTION << "\n"; }; \
     auto queryable_##FMI3FUNCTION = session.declare_queryable(keyexpr_##FMI3FUNCTION, std::function<void(const zenoh::Query&)>(callbacks::FMI3FUNCTION), on_drop_queryable_##FMI3FUNCTION); \
 
 #define PARSE_QUERY(QUERY, INPUT) \
@@ -115,6 +115,8 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
 
 // end of MACROS
 
+bool debug = false;
+
 // Function to load and unload FMU library (platform-specific)
 #ifdef _WIN32
 HMODULE loadFmuLibrary(const std::string& libPath) {
@@ -172,7 +174,9 @@ const fmi3ValueReference* convertRepeatedFieldToCArray(const google::protobuf::R
 }
 
 void printQuery(const zenoh::Query& query) {
-    std::cout << "Query: " << query.get_keyexpr().as_string_view() << std::endl;
+    if (debug) {
+        std::cout << "Query: " << query.get_keyexpr().as_string_view() << std::endl;
+    }
 }
 
 fmi3Instance getInstance(int index) {
@@ -765,19 +769,20 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
 }
 
 
-std::string createResponderIdFile(const std::string& directory, const std::string& responderId) {
+std::string createConfigFile(const std::string& directory, const std::string& responderId) {
     std::filesystem::path filePath = std::filesystem::path(directory) / "responderId";
 
     std::ofstream file(filePath);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to create responderId file at: " + filePath.string());
     }
-    file << "responderId='" << responderId << "'";
+    file << "responderId='" << responderId << "'\n";
+    file << "debug=" << (debug ? "true" : "false") << "\n";
     file.close();
 
     // Verify 
     if (!std::filesystem::exists(filePath)) {
-        throw std::runtime_error("responderId file creation failed at: " + filePath.string());
+        throw std::runtime_error("config file creation failed at: " + filePath.string());
     }
     return filePath.string();
 }
@@ -837,9 +842,9 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
     }
 
     // Add the responderId.txt field to the FMU at the base directory
-    std::string responderIdPath = createResponderIdFile(tempPath, responderId);
-    if (!addFileToZip(fmu, responderIdPath, "binaries/responderId")) {
-        std::cerr << "Error copying the responderId file to FMU." << std::endl;
+    std::string configurationFilePath = createConfigFile(tempPath, responderId);
+    if (!addFileToZip(fmu, configurationFilePath, "binaries/config")) {
+        std::cerr << "Error copying the config file to FMU." << std::endl;
         zip_discard(fmu);
         return;
     }
@@ -858,11 +863,12 @@ void printUsage() {
     std::cout << "Usage:\n";
     std::cout << "  liaison --serve <Path to FMU> <Responder Id>\n";
     std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id>\n";
+    std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id> --debug\n";
 }
 
 int main(int argc, char* argv[]) {
 
-    if (argc != 4) {
+    if (argc < 4 || argc > 5) {
         printUsage();
         return 1;
     }
@@ -870,6 +876,10 @@ int main(int argc, char* argv[]) {
     std::string option = argv[1];
     std::string fmuPath = argv[2];
     std::string responderId = argv[3];
+
+    if (argc == 5 && std::string(argv[4]) == "--debug") {
+        debug = true;
+    }
 
     try {
         if (option == "--serve") {
