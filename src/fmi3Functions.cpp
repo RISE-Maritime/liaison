@@ -77,7 +77,9 @@ fmi3Status fmi3Get##TYPE( \
 }
 
 #define QUERY(fmi3Function, input, output, responderId) \
-    std::cout << "Querying " << fmi3Function << std::endl; \
+    if (debug) { \
+        std::cout << "Querying " << fmi3Function << std::endl; \
+    } \
     std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
     input.SerializeToArray(input_wire.data(), input_wire.size()); \
     std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
@@ -96,7 +98,9 @@ fmi3Status fmi3Get##TYPE( \
     output.ParseFromArray(output_wire.data(), output_wire.size()); \
 
 #define QUERY_INSTANCE(fmi3Function, input, output, responderId) \
-    std::cout << "Querying " << fmi3Function << std::endl; \
+    if (debug) { \
+        std::cout << "Querying " << fmi3Function << std::endl; \
+    } \
     std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
     input.SerializeToArray(input_wire.data(), input_wire.size()); \
     std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
@@ -115,7 +119,9 @@ fmi3Status fmi3Get##TYPE( \
     output.ParseFromArray(output_wire.data(), output_wire.size()); \
 
 #define QUERY_VOID(fmi3Function, input, output, responderId) \
-    std::cout << "Querying " << fmi3Function << std::endl; \
+    if (debug) { \
+        std::cout << "Querying " << fmi3Function << std::endl; \
+    } \
     std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
     input.SerializeToArray(input_wire.data(), input_wire.size()); \
     std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
@@ -135,7 +141,7 @@ fmi3Status fmi3Get##TYPE( \
 
 // end of MACROS
 
-
+bool debug=false;
 std::unique_ptr<zenoh::Session> session;
 
 
@@ -198,35 +204,47 @@ void printDirectoryContents(const std::string& directoryPath) {
     }
 }
 
-void readResponderId() {
+void readConfigFile() {
     
     std::string baseDirectory = getBaseDirectory();
-    std::string responderIdPath = baseDirectory + "/responderId";
-    std::ifstream file(responderIdPath);
+    std::string configFilePath = baseDirectory + "/config";
+    std::ifstream file(configFilePath);
     if (!file.is_open()) {
        printDirectoryContents(baseDirectory);
-       throw std::runtime_error("Failed to open responderId file at: " + responderIdPath);
+       throw std::runtime_error("Failed to open config file at: " + configFilePath);
     }
 
+    // Read responderId from the file
     std::string line;
     std::regex regexPattern(R"(responderId='([^']+)')");
     std::smatch match;
-
     while (std::getline(file, line)) {
         if (std::regex_search(line, match, regexPattern) && match.size() > 1) {
             responderId = match.str(1);
-            return;
+            break;
+        }
+    }
+    if (responderId.empty()) {
+        throw std::runtime_error("responderId not found in file: " + configFilePath);
+    }
+
+    // Read debug flag from the file
+    std::regex debugPattern(R"(debug=(true|false))");
+    while (std::getline(file, line)) {
+        if (std::regex_search(line, match, debugPattern) && match.size() > 1) {
+            debug = match.str(1) == "true";
+            break;
         }
     }
 
-    throw std::runtime_error("responderId not found in file: " + responderIdPath);
+    return;
     
 }
 
 void StartZenohSession() {
     // Read the responder id
     try {
-        readResponderId();
+        readConfigFile();
     } catch (const std::runtime_error& e) {
         throw std::runtime_error(std::string("Could not read responderId file - ") + e.what());
     }

@@ -6,7 +6,7 @@ By doing so, Liasion enables co-simulations across organisations without sharing
 
 ## Usage
 
-Build all the targets and `cd` to the `build` folder.
+Dowload the latest [release](https://github.com/RISE-Maritime/liaison/releases).
 
 ### Step 1: Create a "Liaison FMU"
 
@@ -16,10 +16,18 @@ Build all the targets and `cd` to the `build` folder.
 
 ``./liaison --serve ../tests/BouncingBall.fmu fmus/bouncingball``
 
-### Step 3: Simulat the "Liaison FMU"
+### Step 3: Simulate the "Liaison FMU"
 
 ``fmpy simulate BouncingBallLiaison.fmu --show-plot``
 
+## Debug
+
+The flag `--debug` can be used in the creation of the Liasion FMU or the serving of the FMU so that the output of either is extra verbose.
+
+``./liaison --make-fmu ../tests/BouncingBall.fmu fmus/bouncingball --debug``
+``./liaison --serve ../tests/BouncingBall.fmu fmus/bouncingball --debug``
+
+``
 
 ## Development
 
