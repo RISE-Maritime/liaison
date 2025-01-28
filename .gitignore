@@ -1,1 +1,3 @@
 build
+*.pem
+tests/config.json
