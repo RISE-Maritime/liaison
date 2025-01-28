@@ -147,24 +147,26 @@ fmi3Status transformToFmi3Status(proto::Status status) {
 
 #ifdef _WIN32
 std::string getBaseDirectory() {
-    char path[MAX_PATH];
+  char path[MAX_PATH] = {0};
     HMODULE hModule = NULL;
 
-    // Retrieve the module handle for this shared library
-    GetModuleHandleEx(
-        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        (LPCSTR)&getBaseDirectory, &hModule);
-
-    // Check if the module handle was retrieved and get the file path
-    if (hModule && GetModuleFileName(hModule, path, MAX_PATH)) {
-        std::filesystem::path libraryPath(path);
-        // Return the grandparent directory
-        return libraryPath.parent_path().parent_path().string();
+    // Retrieve the handle for the DLL containing this function
+    if (!GetModuleHandleEx(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | 
+            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, 
+            reinterpret_cast<LPCSTR>(&getBaseDirectory), 
+            &hModule)) {
+        throw std::runtime_error("Failed to retrieve the shared library handle.");
     }
 
-    // Error handling
-    throw std::runtime_error("Failed to retrieve shared library path.");
+    // Retrieve the full path of the DLL
+    if (GetModuleFileName(hModule, path, MAX_PATH) == 0) {
+        throw std::runtime_error("Failed to retrieve shared library path.");d
+    }
+
+    // Convert the path to a filesystem path and get the grandparent directory
+    std::filesystem::path libraryPath(path);
+    return libraryPath.parent_path().parent_path().string();
 }
 #else
 std::string getBaseDirectory() {
