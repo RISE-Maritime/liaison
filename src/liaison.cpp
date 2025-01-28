@@ -652,10 +652,14 @@ std::string constructLibraryPath(const std::string& tempPath, const std::string&
 #endif
 }
 
-int startServer(const std::string& fmuPath, const std::string& responderId) {
+int startServer(const std::string& fmuPath, const std::string& responderId, const std::string& zenohConfigPath) {
     std::cout << "Starting server using:" << std::endl;
     std::cout << "  FMU: " << fmuPath << std::endl;
     std::cout << "  responderId: " << responderId << std::endl;
+    std::cout << "  zenoh config file: '" << zenohConfigPath << "'" << std::endl;
+    if (debug) {
+        std::cout << "  Debug: enabled" << std::endl;
+    }
 
     // Load the FMU library
     std::filesystem::path fmuFilePath(fmuPath);
@@ -705,8 +709,8 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
     BIND_FMU_LIBRARY_FUNCTION(fmi3Terminate)
 
     // Start Zenoh Session
-    zenoh::Config config = zenoh::Config::create_default();
-    auto session = zenoh::Session::open(std::move(config));
+    zenoh::Config zconfig = zenohConfigPath.empty() ? zenoh::Config::create_default() : zenoh::Config::from_file(zenohConfigPath);
+    auto session = zenoh::Session::open(std::move(zconfig));
 
     // Queryable declarations
     DECLARE_QUERYABLE(fmi3InstantiateCoSimulation, responderId)
@@ -769,12 +773,12 @@ int startServer(const std::string& fmuPath, const std::string& responderId) {
 }
 
 
-std::string createConfigFile(const std::string& directory, const std::string& responderId) {
+std::string createLiaisonConfigFile(const std::string& directory, const std::string& responderId) {
     std::filesystem::path filePath = std::filesystem::path(directory) / "responderId";
 
     std::ofstream file(filePath);
     if (!file.is_open()) {
-        throw std::runtime_error("Failed to create responderId file at: " + filePath.string());
+        throw std::runtime_error("Failed to create Liaison config file at: " + filePath.string());
     }
     file << "responderId='" << responderId << "'\n";
     file << "debug=" << (debug ? "true" : "false") << "\n";
@@ -782,16 +786,21 @@ std::string createConfigFile(const std::string& directory, const std::string& re
 
     // Verify 
     if (!std::filesystem::exists(filePath)) {
-        throw std::runtime_error("config file creation failed at: " + filePath.string());
+        throw std::runtime_error("Liaison config file creation failed at: " + filePath.string());
     }
     return filePath.string();
 }
 
-void generateFmu(const std::string& fmuPath, const std::string& responderId) {
+void generateFmu(const std::string& fmuPath, const std::string& responderId, const std::string& zenohConfigPath) {
     std::cout << "Generating Liaison FMU using:" << std::endl;
     std::cout << "  FMU: '" << fmuPath << "'" << std::endl;
     std::cout << "  responderId: '" << responderId << "'" << std::endl;;
-
+    if (!zenohConfigPath.empty()) {
+        std::cout << "  zenoh config file: '" << zenohConfigPath << "'" << std::endl;
+    }
+    if (debug) {
+        std::cout << "  Debug: enabled" << std::endl;
+    }
     
 
     std::filesystem::path fmuFilePath(fmuPath);
@@ -841,12 +850,37 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId) {
         return;
     }
 
-    // Add the responderId.txt field to the FMU at the base directory
-    std::string configurationFilePath = createConfigFile(tempPath, responderId);
-    if (!addFileToZip(fmu, configurationFilePath, "binaries/config")) {
-        std::cerr << "Error copying the config file to FMU." << std::endl;
+    // Add the config file the FMU at the base directory
+    std::string liaisonConfigFilePath = createLiaisonConfigFile(tempPath, responderId);
+    if (!addFileToZip(fmu, liaisonConfigFilePath, "binaries/config")) {
+        std::cerr << "Error copying the Liaison config file to FMU." << std::endl;
         zip_discard(fmu);
         return;
+    }
+
+    // Add the Zenoh config file to the FMU at the base directory
+    if (!zenohConfigPath.empty()) {
+        if (!addFileToZip(fmu, zenohConfigPath, "binaries/zenoh_config.json")) {
+            std::cerr << "Error copying the Zenoh config file to FMU." << std::endl;
+            zip_discard(fmu);
+            return;
+        }
+    }
+
+    // Add any files with the extension .pem present in the zenoh config directory
+    if (!zenohConfigPath.empty()) {
+        std::filesystem::path zenohConfigDir = std::filesystem::path(zenohConfigPath).parent_path();
+        for (const auto& entry : std::filesystem::directory_iterator(zenohConfigDir)) {
+            if (entry.path().extension() == ".pem") {
+                if (!addFileToZip(fmu, entry.path().string(), "binaries/" + entry.path().filename().string())) {
+                    std::cerr << "Error copying the PEM file to FMU." << std::endl;
+                    zip_discard(fmu);
+                    return;
+                } else {
+                    std::cout << "  PEM file: " << entry.path().string() << std::endl;
+                }
+            }
+        }
     }
 
     // Close the zip archive
@@ -864,11 +898,14 @@ void printUsage() {
     std::cout << "  liaison --serve <Path to FMU> <Responder Id>\n";
     std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id>\n";
     std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id> --debug\n";
+    std::cout << "  liaison --serve <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
+    std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
 }
 
 int main(int argc, char* argv[]) {
 
-    if (argc < 4 || argc > 5) {
+    // Parse command line arguments
+    if (argc < 4 ) {
         printUsage();
         return 1;
     }
@@ -877,15 +914,29 @@ int main(int argc, char* argv[]) {
     std::string fmuPath = argv[2];
     std::string responderId = argv[3];
 
-    if (argc == 5 && std::string(argv[4]) == "--debug") {
-        debug = true;
+    // Parse optional flags
+    std::string zenohConfigPath;
+    for (int i = 4; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--debug") {
+            debug = true;
+        } else if (arg == "--zenoh-config" && i + 1 < argc) {
+            zenohConfigPath = argv[++i];
+        } else {
+            if (argv[--i] != "--zenoh-config") {
+                std::cerr << "Unknown argument: " << arg << "\n";
+                printUsage();
+                return 1;
+            }
+        }
     }
 
+    
     try {
         if (option == "--serve") {
-            startServer(fmuPath, responderId);
+            startServer(fmuPath, responderId, zenohConfigPath);
         } else if (option == "--make-fmu") {
-            generateFmu(fmuPath, responderId);
+            generateFmu(fmuPath, responderId, zenohConfigPath);
         } else {
             printUsage();
             return 1;
