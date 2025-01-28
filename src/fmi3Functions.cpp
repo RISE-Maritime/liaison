@@ -10,12 +10,16 @@
 #include <fstream>
 #include <string>
 #include <regex>
+#include <thread>
+#include <chrono>
 #include <filesystem>
 #include "zenoh.hxx"
 #include "fmi3.pb.h"
 #include "fmi3Functions.h"
 
 // MACROS
+
+#define MAX_TRIES 3
 
 #define TRY_CODE(FUNCTION_CALL, ERROR_MSG, ERROR_RETURN) \
     try {                                                        \
@@ -76,7 +80,7 @@ fmi3Status fmi3Get##TYPE( \
     return transformToFmi3Status(output.status()); \
 }
 
-#define QUERY(fmi3Function, input, output, responderId) \
+#define BASE_QUERY(fmi3Function, input, output, responderId, errorReturnValue) \
     if (debug) { \
         std::cout << "Querying " << fmi3Function << std::endl; \
     } \
@@ -88,62 +92,37 @@ fmi3Status fmi3Get##TYPE( \
     options.payload = zenoh::Bytes(std::move(input_wire)); \
     auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
     auto res = replies.recv(); \
-    if (!std::holds_alternative<zenoh::Reply>(res)) { \
-        std::cerr << "Exception in" << fmi3Function << ": Expected a Zenoh Reply but got something else." << std::endl; \
-        return fmi3Error;\
+    if (std::holds_alternative<zenoh::channels::RecvError>(res)) { \
+        if (std::get<zenoh::channels::RecvError>(res) == zenoh::channels::RecvError::Z_DISCONNECTED) { \
+            std::cerr << "Exception in " << fmi3Function << ": '" << expr << "' is disconnected." << std::endl; \
+        } else if (std::get<zenoh::channels::RecvError>(res) == zenoh::channels::RecvError::Z_NODATA) { \
+            std::cerr << "Exception in " << fmi3Function << ": No data received from '" << expr << "'." << std::endl; \
+        } \
+        session.reset(); \
+        return errorReturnValue; \
     } \
     const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
     const auto& output_payload = sample.get_payload(); \
     std::vector<uint8_t> output_wire = output_payload.as_vector(); \
     output.ParseFromArray(output_wire.data(), output_wire.size()); \
+
+
+#define QUERY(fmi3Function, input, output, responderId) \
+    BASE_QUERY(fmi3Function, input, output, responderId, fmi3Error) \
+    
 
 #define QUERY_INSTANCE(fmi3Function, input, output, responderId) \
-    if (debug) { \
-        std::cout << "Querying " << fmi3Function << std::endl; \
-    } \
-    std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
-    input.SerializeToArray(input_wire.data(), input_wire.size()); \
-    std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
-    zenoh::Session::GetOptions options; \
-    options.target = zenoh::QueryTarget::Z_QUERY_TARGET_ALL; \
-    options.payload = zenoh::Bytes(std::move(input_wire)); \
-    auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
-    auto res = replies.recv(); \
-    if (!std::holds_alternative<zenoh::Reply>(res)) { \
-        std::cerr << "Exception in" << fmi3Function << ": Expected a Zenoh Reply but got something else." << std::endl; \
-        return nullptr;\
-    } \
-    const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
-    const auto& output_payload = sample.get_payload(); \
-    std::vector<uint8_t> output_wire = output_payload.as_vector(); \
-    output.ParseFromArray(output_wire.data(), output_wire.size()); \
+    BASE_QUERY(fmi3Function, input, output, responderId, nullptr) \
+   
 
 #define QUERY_VOID(fmi3Function, input, output, responderId) \
-    if (debug) { \
-        std::cout << "Querying " << fmi3Function << std::endl; \
-    } \
-    std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
-    input.SerializeToArray(input_wire.data(), input_wire.size()); \
-    std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
-    zenoh::Session::GetOptions options; \
-    options.target = zenoh::QueryTarget::Z_QUERY_TARGET_ALL; \
-    options.payload = zenoh::Bytes(std::move(input_wire)); \
-    auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
-    auto res = replies.recv(); \
-    if (!std::holds_alternative<zenoh::Reply>(res)) { \
-        std::cerr << "Exception in" << fmi3Function << ": Expected a Zenoh Reply but got something else." << std::endl; \
-        return; \
-    } \
-    const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
-    const auto& output_payload = sample.get_payload(); \
-    std::vector<uint8_t> output_wire = output_payload.as_vector(); \
-    output.ParseFromArray(output_wire.data(), output_wire.size()); 
+    BASE_QUERY(fmi3Function, input, output, responderId, ) \
+   
 
 // end of MACROS
 
 bool debug=false;
 std::unique_ptr<zenoh::Session> session;
-
 
 class Placeholder {
 public:
@@ -169,17 +148,35 @@ fmi3Status transformToFmi3Status(proto::Status status) {
 #ifdef _WIN32
 std::string getBaseDirectory() {
     char path[MAX_PATH];
-    HMODULE hModule = GetModuleHandle(NULL);
-    GetModuleFileName(hModule, path, MAX_PATH);
-    std::filesystem::path libraryPath(path);
-    return libraryPath.parent_path().parent_path().string(); 
+    HMODULE hModule = NULL;
+
+    // Retrieve the module handle for this shared library
+    GetModuleHandleEx(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        (LPCSTR)&getBaseDirectory, &hModule);
+
+    // Check if the module handle was retrieved and get the file path
+    if (hModule && GetModuleFileName(hModule, path, MAX_PATH)) {
+        std::filesystem::path libraryPath(path);
+        // Return the grandparent directory
+        return libraryPath.parent_path().parent_path().string();
+    }
+
+    // Error handling
+    throw std::runtime_error("Failed to retrieve shared library path.");
 }
 #else
 std::string getBaseDirectory() {
     Dl_info dl_info;
-    dladdr((void*)getBaseDirectory, &dl_info);
-    std::filesystem::path libraryPath(dl_info.dli_fname);
-    return libraryPath.parent_path().parent_path().string(); 
+
+    // Retreive the shared library path
+    if (dladdr((void*)getBaseDirectory, &dl_info)) {
+        std::filesystem::path libraryPath(dl_info.dli_fname);
+        return libraryPath.parent_path().parent_path().string(); 
+    }
+    // Error handling
+    throw std::runtime_error("Failed to retrieve shared library path");
 }
 #endif
 
@@ -250,8 +247,14 @@ void StartZenohSession() {
     }
     // Start Zenoh Session
     try {
-        zenoh::Config config = zenoh::Config::create_default();
-        session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(config)));
+        std::string baseDirectory = getBaseDirectory();
+        std::string zenohConfigPath = baseDirectory + "/zenoh_config.json";
+        bool zenohConfigExists = std::filesystem::exists(zenohConfigPath);
+        if (zenohConfigExists && debug) {
+            std::cout << "Zenoh config file found." << std::endl;
+        } 
+        zenoh::Config zenohConfig = std::filesystem::exists(zenohConfigPath) ? zenoh::Config::from_file(zenohConfigPath) : zenoh::Config::create_default();
+        session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(zenohConfig)));
         std::cout << "Zenoh Session started successfully." << std::endl;
     } catch (const std::exception &e) {
         throw std::runtime_error(std::string("Failed to start Zenoh Session - ") + e.what());
