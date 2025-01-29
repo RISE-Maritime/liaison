@@ -161,7 +161,7 @@ std::string getBaseDirectory() {
 
     // Retrieve the full path of the DLL
     if (GetModuleFileName(hModule, path, MAX_PATH) == 0) {
-        throw std::runtime_error("Failed to retrieve shared library path.");d
+        throw std::runtime_error("Failed to retrieve shared library path.");
     }
 
     // Convert the path to a filesystem path and get the grandparent directory
