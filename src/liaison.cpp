@@ -116,6 +116,7 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
 // end of MACROS
 
 bool debug = false;
+fmi3String resourcePath = nullptr;
 
 // Function to load and unload FMU library (platform-specific)
 #ifdef _WIN32
@@ -266,7 +267,7 @@ namespace callbacks {
         fmi3Instance instance = fmu::fmi3InstantiateCoSimulation(
             input.instance_name().c_str(),
             input.instantiation_token().c_str(),
-            nullptr,
+            resourcePath,
             input.visible(),
             input.logging_on(),
             input.event_mode_used(),
@@ -294,7 +295,7 @@ namespace callbacks {
         fmi3Instance instance = fmu::fmi3InstantiateModelExchange(
             input.instance_name().c_str(),
             input.instantiation_token().c_str(),
-            nullptr,
+            resourcePath,
             input.visible(),
             input.logging_on(),
             nullptr,
@@ -316,7 +317,7 @@ namespace callbacks {
         fmi3Instance instance = fmu::fmi3InstantiateScheduledExecution(
             input.instance_name().c_str(),
             input.instantiation_token().c_str(),
-            nullptr,
+            resourcePath,
             input.visible(),
             input.logging_on(),
             nullptr,
@@ -656,9 +657,11 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
     std::cout << "Starting server using:" << std::endl;
     std::cout << "  FMU: " << fmuPath << std::endl;
     std::cout << "  responderId: " << responderId << std::endl;
-    std::cout << "  zenoh config file: '" << zenohConfigPath << "'" << std::endl;
+    if (!zenohConfigPath.empty()) {
+       std::cout << "  zenoh config file: '" << zenohConfigPath << "'" << std::endl;
+    } 
     if (debug) {
-        std::cout << "  Debug: enabled" << std::endl;
+        std::cout << "  debug: enabled" << std::endl;
     }
 
     // Load the FMU library
@@ -666,6 +669,9 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
     std::string modelName = fmuFilePath.stem().string();
     std::string tempPath = unzipFmu(fmuPath);
     std::string libPath = constructLibraryPath(tempPath, modelName);
+
+    // Set the resource path
+    resourcePath = (tempPath + "/resources").c_str();
     
     // Load the FMU library dynamically
     auto fmuLibrary = loadFmuLibrary(libPath);
