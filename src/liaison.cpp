@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <zip.h>
+#include <dirent.h>
 #include <iostream>
 
 #include "zenoh.hxx"
@@ -260,9 +261,6 @@ namespace callbacks {
 
         proto::fmi3InstantiateCoSimulationMessage input;
         PARSE_QUERY(query, input)
-
-        // TODO: Resource path should determined according to the place
-        // where the FMU is unpacked.
 
         fmi3Instance instance = fmu::fmi3InstantiateCoSimulation(
             input.instance_name().c_str(),
@@ -906,38 +904,88 @@ void printUsage() {
     std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id> --debug\n";
     std::cout << "  liaison --serve <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
     std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
+    std::cout << "  liaison --serve <Path to FMU> <Responder Id> --python-env <Path to Python environment>\n";
+    std::cout << "  liaison --serve <Path to FMU> <Responder Id> --pyhton-lib <Path to Python library>\n";
 }
 
-int main(int argc, char* argv[]) {
+std::string findPythonLib(const std::string& libDir) {
+    DIR* dir = opendir(libDir.c_str());
+    if (!dir) {
+        return "";
+    }
+    std::string foundLib;
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string filename(entry->d_name);
+        if (filename.find("libpython3") != std::string::npos &&
+            filename.find(".so") != std::string::npos) {
+            foundLib = libDir + "/" + filename;
+            break;
+        }
+    }
+    closedir(dir);
+    return foundLib;
+}
 
+
+int main(int argc, char* argv[]) {
     // Parse command line arguments
-    if (argc < 4 ) {
+    if (argc < 4) {
         printUsage();
         return 1;
     }
-
     std::string option = argv[1];
     std::string fmuPath = argv[2];
     std::string responderId = argv[3];
 
     // Parse optional flags
     std::string zenohConfigPath;
+    std::string pythonEnvPath;
+    std::string pythonLibPath;
     for (int i = 4; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--debug") {
             debug = true;
         } else if (arg == "--zenoh-config" && i + 1 < argc) {
             zenohConfigPath = argv[++i];
+        } else if (arg == "--python-env" && i + 1 < argc) {
+            pythonEnvPath = argv[++i];
+        } else if (arg == "--python-lib" && i + 1 < argc) {
+            pythonLibPath = argv[++i];
         } else {
-            if (argv[--i] != "--zenoh-config") {
-                std::cerr << "Unknown argument: " << arg << "\n";
-                printUsage();
-                return 1;
-            }
+            std::cerr << "Unknown argument: " << arg << "\n";
+            printUsage();
+            return 1;
         }
     }
 
-    
+    if (!pythonEnvPath.empty() && !pythonLibPath.empty()) {
+        std::cout << "The argument --python-env cannot be used together with --python-lib. Ignoring --python-lib.\n";
+    }
+
+    // Re-execute the process if either python-env or python-lib flag is provided,
+    // but only if it hasn't been already re-executed.
+    if (getenv("LIAISON_RELAUNCHED") == nullptr && (!pythonEnvPath.empty() || !pythonLibPath.empty())) {
+        if (!pythonEnvPath.empty()) {
+            pythonLibPath = findPythonLib(pythonEnvPath + "/lib");
+           }
+        if (!pythonLibPath.empty()) {
+            setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
+        }
+        // Set a marker to prevent reexecution.
+        setenv("LIAISON_RELAUNCHED", "1", 1);
+
+        // Rebuild the argument list for execvp and pass all original arguments to the new process.
+        execvp(argv[0], argv);
+
+        perror("execvp failed");
+        return 1;
+    } 
+    if ((getenv("LIAISON_RELAUNCHED") != nullptr) && debug) {
+        std::cout << "Liaison re-executed to preload the Python shared library:\n";
+        std::cout << getenv("LD_PRELOAD") << std::endl;
+    }
+
     try {
         if (option == "--serve") {
             startServer(fmuPath, responderId, zenohConfigPath);
@@ -953,5 +1001,4 @@ int main(int argc, char* argv[]) {
     }
 
     return 0;
-
 }
