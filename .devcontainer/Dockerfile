@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     liblzma-dev \
     libzstd-dev \
     libssl-dev \
+    libspdlog-dev \
     pkg-config \
     python3 \
     python3-pip 
@@ -88,4 +89,4 @@ USER ${USERNAME}
 # Copy the workspace files to the container
 COPY . /workspaces
 
-CMD ["/bin/bash"]
+CMD ["bash"]

@@ -16,6 +16,7 @@
 #include "zenoh.hxx"
 #include "fmi3.pb.h"
 #include "fmi3Functions.h"
+#include <spdlog/spdlog.h>
 #include "utils.hpp"
 
 
@@ -24,11 +25,10 @@
 #define MAX_BINARY_SIZE 4096
 
 
-
 #define DECLARE_QUERYABLE(FMI3FUNCTION, RESPONDER_ID) \
     std::string expr_##FMI3FUNCTION = "rpc/" + RESPONDER_ID + "/" + std::string(#FMI3FUNCTION); \
     zenoh::KeyExpr keyexpr_##FMI3FUNCTION(expr_##FMI3FUNCTION); \
-    auto on_drop_queryable_##FMI3FUNCTION = []() { if (debug) std::cout << "Destroying queryable for " << #FMI3FUNCTION << "\n"; }; \
+    auto on_drop_queryable_##FMI3FUNCTION = []() { if (debug) spdlog::debug("Destroying queryable for {}",#FMI3FUNCTION); }; \
     auto queryable_##FMI3FUNCTION = session.declare_queryable(keyexpr_##FMI3FUNCTION, std::function<void(const zenoh::Query&)>(callbacks::FMI3FUNCTION), on_drop_queryable_##FMI3FUNCTION); \
 
 #define PARSE_QUERY(QUERY, INPUT) \
@@ -50,7 +50,12 @@
     fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)GetProcAddress(fmuLibrary, #FMI3FUNCTION);
 #else
 #define BIND_FMU_LIBRARY_FUNCTION(FMI3FUNCTION) \
-    fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)dlsym(fmuLibrary, #FMI3FUNCTION);
+    fmu::FMI3FUNCTION = (FMI3FUNCTION##TYPE*)dlsym(fmuLibrary, #FMI3FUNCTION); \
+    if (!fmu::FMI3FUNCTION) { \
+        std::ostringstream oss; \
+        oss << "Unable to load function " << #FMI3FUNCTION << ": " << dlerror(); \
+        throw std::runtime_error(oss.str()); \
+    }
 #endif
 
 
@@ -177,7 +182,7 @@ const fmi3ValueReference* convertRepeatedFieldToCArray(const google::protobuf::R
 
 void printQuery(const zenoh::Query& query) {
     if (debug) {
-        std::cout << "Query: " << query.get_keyexpr().as_string_view() << std::endl;
+        spdlog::debug("Query: {}", query.get_keyexpr().as_string_view());
     }
 }
 
@@ -385,13 +390,13 @@ namespace callbacks {
         try {
             fmu::fmi3FreeInstance(getInstance(input.instance_index()));
         } catch (std::runtime_error& error) {
-            std::cerr << "Failed to free FMU instance." << std::endl;
+            spdlog::error("Failed to free FMU instance.");
         }
         try {
             auto it = instances.find(input.instance_index());
             instances.erase(it); 
         } catch (std::runtime_error& error) {
-            std::cerr << "Failed to erase instance from instances." << std::endl;
+            spdlog::error("Failed to erase instance from instances.");
         }
 
         proto::voidMessage output;
@@ -652,14 +657,16 @@ std::string constructLibraryPath(const std::string& tempPath, const std::string&
 }
 
 int startServer(const std::string& fmuPath, const std::string& responderId, const std::string& zenohConfigPath) {
-    std::cout << "Starting server using:" << std::endl;
-    std::cout << "  FMU: " << fmuPath << std::endl;
-    std::cout << "  responderId: " << responderId << std::endl;
+    spdlog::info("Starting server using:");
+    spdlog::info("  FMU: {}", fmuPath);
+    spdlog::info("  Responder ID: {}", responderId);
+
     if (!zenohConfigPath.empty()) {
-       std::cout << "  zenoh config file: '" << zenohConfigPath << "'" << std::endl;
-    } 
+        spdlog::info("  Zenoh config file: {}", zenohConfigPath);
+    }
+
     if (debug) {
-        std::cout << "  debug: enabled" << std::endl;
+        spdlog::info("  DEBUG ON");
     }
 
     // Load the FMU library
@@ -669,7 +676,8 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
     std::string libPath = constructLibraryPath(tempPath, modelName);
 
     // Set the resource path
-    resourcePath = (tempPath + "/resources").c_str();
+    std::string resourcePathStr = tempPath + "/resources";
+    resourcePath = resourcePathStr.c_str();
     
     // Load the FMU library dynamically
     auto fmuLibrary = loadFmuLibrary(libPath);
@@ -756,8 +764,8 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
     DECLARE_QUERYABLE(fmi3Reset, responderId)
     DECLARE_QUERYABLE(fmi3Terminate, responderId)
 
-    printf("Liaison server is now listening!\n");
-    printf("Enter 'q' to quit...\n");
+    spdlog::info("Liaison server is now listening!\n");
+    spdlog::info("Enter 'q' to quit...\n");
     int c = 0;
     while (c != 'q') {
         c = getchar();
@@ -790,29 +798,32 @@ std::string createLiaisonConfigFile(const std::string& directory, const std::str
 
     // Verify 
     if (!std::filesystem::exists(filePath)) {
-        throw std::runtime_error("Liaison config file creation failed at: " + filePath.string());
+        throw std::runtime_error("Failed to create Liaison config file at: " + filePath.string());
     }
     return filePath.string();
 }
 
-void generateFmu(const std::string& fmuPath, const std::string& responderId, const std::string& zenohConfigPath) {
-    std::cout << "Generating Liaison FMU using:" << std::endl;
-    std::cout << "  FMU: '" << fmuPath << "'" << std::endl;
-    std::cout << "  responderId: '" << responderId << "'" << std::endl;;
-    if (!zenohConfigPath.empty()) {
-        std::cout << "  zenoh config file: '" << zenohConfigPath << "'" << std::endl;
-    }
-    if (debug) {
-        std::cout << "  Debug: enabled" << std::endl;
-    }
-    
+void makeFmu(const std::string& fmuPath, const std::string& responderId, const std::string& zenohConfigPath) {
+    spdlog::info("\n"
+             "====================================\n"
+             "Making Liaison FMU\n"
+             "====================================\n"
+             "FMU: {}\n"
+             "Responder ID: {}\n"
+             "{}"
+             "{}"
+             "====================================",
+             fmuPath, 
+             responderId, 
+             (!zenohConfigPath.empty() ? fmt::format("Zenoh config file: {}\n", zenohConfigPath) : ""),
+             (debug ? "Debug: enabled\n" : ""));
 
     std::filesystem::path fmuFilePath(fmuPath);
     std::string modelName = fmuFilePath.stem().string();
     std::string tempPath = unzipFmu(fmuPath);
 
     if (tempPath.empty()) {
-        std::cerr << "Failed to unzip FMU." << std::endl;
+        throw std::runtime_error("Failed to unzip the FMU.");
         return;
     }
     
@@ -822,52 +833,71 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId, con
     int error = 0;
     zip_t* fmu = zip_open(outputFmuPath.c_str(), ZIP_CREATE | ZIP_TRUNCATE, &error);
     if (!fmu) {
-        std::cerr << "Failed to create FMU at: " << outputFmuPath << " Error: " << zip_strerror(fmu) << std::endl;
-        return;
+        std::ostringstream oss;
+        oss << "Failed to create the Liaison FMU: " << zip_strerror(fmu);
+        throw std::runtime_error(oss.str());
     }
 
     // Add the renamed DLL files to the FMU inside the binaries/platform directory
     size_t nDynamicLibraryErrors = 0;
     std::string originalLinuxDynamicLibraryPath ="./binaries/x86_64-linux/libliaisonfmu.so";
-    std::string renamedLinuxDynamicLibraryPath = "binaries/x86_64-linux/" + modelName + ".so";    
-    if (!addFileToZip(fmu, originalLinuxDynamicLibraryPath, renamedLinuxDynamicLibraryPath)) {
-        std::cerr << "Warning: failed adding Liaison Linux dynamic library file to FMU." << std::endl;
+    std::string renamedLinuxDynamicLibraryPath = "binaries/x86_64-linux/" + modelName + ".so";
+    try {
+        addFileToFmu(fmu, originalLinuxDynamicLibraryPath, renamedLinuxDynamicLibraryPath);
+    } catch (std::runtime_error& error) {
+        std::ostringstream oss;
+        oss << "Failed adding Liaison Linux dynamic library file to the Liaison FMU: " << error.what();
+        spdlog::warn(oss.str());
         nDynamicLibraryErrors++;
-    }
+    }    
+    
     std::string originalWindowsDynamicLibraryPath ="./binaries/x86_64-windows/liaisonfmu.dll";
-    std::string renamedWindowsDynamicLibraryPath = "binaries/x86_64-windows/" + modelName + ".dll";    
-    if (!addFileToZip(fmu, originalWindowsDynamicLibraryPath, renamedWindowsDynamicLibraryPath)) {
-        std::cerr << "Warning: failed adding Liaison Windows dynamic library file to FMU." << std::endl;
+    std::string renamedWindowsDynamicLibraryPath = "binaries/x86_64-windows/" + modelName + ".dll";  
+    try {
+        addFileToFmu(fmu, originalWindowsDynamicLibraryPath, renamedWindowsDynamicLibraryPath);
+    } catch (std::runtime_error& error) {
+        std::ostringstream oss;
+        oss << "Failed adding Liaison Windows dynamic library file to the Liaison FMU: " << error.what();
+        spdlog::warn(oss.str());
         nDynamicLibraryErrors++;
     }
+
     if (nDynamicLibraryErrors == 2) {
-        std::cerr << "Fatal Error: Failed to add a single Liaison dynamic library file to the Liaison FMU." << std::endl;
         zip_discard(fmu);
-        return;
+        throw std::runtime_error("Failed adding ANY Liaison dynamic library file to the Liaison FMU. At least one is required.");
     }
 
     // Add the modelDescription.xml file to the FMU at the base directory
     std::string modelDescriptionPath = tempPath + "/modelDescription.xml";
-    if (!addFileToZip(fmu, modelDescriptionPath, "modelDescription.xml")) {
-        std::cerr << "Error adding modelDescription.xml file to FMU." << std::endl;
+    try {
+        addFileToFmu(fmu, modelDescriptionPath, "modelDescription.xml");
+    } catch (std::runtime_error& error) {
         zip_discard(fmu);
-        return;
+        std::ostringstream oss;
+        oss << "Failed adding modelDescription.xml to the Liaison FMU: " << error.what();
+        throw std::runtime_error(oss.str());
     }
 
     // Add the config file the FMU at the base directory
     std::string liaisonConfigFilePath = createLiaisonConfigFile(tempPath, responderId);
-    if (!addFileToZip(fmu, liaisonConfigFilePath, "binaries/config")) {
-        std::cerr << "Error copying the Liaison config file to FMU." << std::endl;
+    try {
+        addFileToFmu(fmu, liaisonConfigFilePath, "binaries/config");
+    } catch (std::runtime_error& error) {
         zip_discard(fmu);
-        return;
+        std::ostringstream oss;
+        oss << "Failed adding Liaison config file to the Liaison FMU: " << error.what();
+        throw std::runtime_error(oss.str());
     }
 
     // Add the Zenoh config file to the FMU at the base directory
     if (!zenohConfigPath.empty()) {
-        if (!addFileToZip(fmu, zenohConfigPath, "binaries/zenoh_config.json")) {
-            std::cerr << "Error copying the Zenoh config file to FMU." << std::endl;
+        try {
+            addFileToFmu(fmu, zenohConfigPath, "binaries/zenoh_config.json");
+        } catch (std::runtime_error& error) {
             zip_discard(fmu);
-            return;
+            std::ostringstream oss;
+            oss << "Failed adding Zenoh config file to the Liaison FMU: " << error.what();
+            throw std::runtime_error(oss.str());
         }
     }
 
@@ -875,13 +905,15 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId, con
     if (!zenohConfigPath.empty()) {
         std::filesystem::path zenohConfigDir = std::filesystem::path(zenohConfigPath).parent_path();
         for (const auto& entry : std::filesystem::directory_iterator(zenohConfigDir)) {
-            if (entry.path().extension() == ".pem") {
-                if (!addFileToZip(fmu, entry.path().string(), "binaries/" + entry.path().filename().string())) {
-                    std::cerr << "Error copying the PEM file to FMU." << std::endl;
+            if (entry.path().extension() == ".pem") { 
+                try {
+                    addFileToFmu(fmu, entry.path().string(), "binaries/" + entry.path().filename().string()); 
+                    spdlog::info("  PEM file: {}", entry.path().string());
+                } catch (std::runtime_error& error) {
                     zip_discard(fmu);
-                    return;
-                } else {
-                    std::cout << "  PEM file: " << entry.path().string() << std::endl;
+                    std::ostringstream oss;
+                    oss << "Failed adding PEM file to the Liaison FMU: " << error.what();
+                    throw std::runtime_error(oss.str());
                 }
             }
         }
@@ -889,25 +921,40 @@ void generateFmu(const std::string& fmuPath, const std::string& responderId, con
 
     // Close the zip archive
     if (zip_close(fmu) < 0) {
-        std::cerr << "Failed to finalize FMU zip archive: " << zip_strerror(fmu) << std::endl;
+        std::ostringstream oss;
+        oss << "Failed to finalize FMU zip archive: " << zip_strerror(fmu);
+        throw std::runtime_error(oss.str());
         return;
     }
 
-    std::cout << "FMU successfully created! "  << std::endl;
+    spdlog::info("FMU successfully created! ");
 }
 
 
 void printUsage() {
-    std::cout << "Usage:\n";
-    std::cout << "  liaison --serve <Path to FMU> <Responder Id>\n";
-    std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id>\n";
-    std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id> --debug\n";
-    std::cout << "  liaison --serve <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
-    std::cout << "  liaison --make-fmu <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
-    std::cout << "  liaison --serve <Path to FMU> <Responder Id> --python-env <Path to Python environment>\n";
-    std::cout << "  liaison --serve <Path to FMU> <Responder Id> --pyhton-lib <Path to Python library>\n";
+    std::cout <<"Usage:\n";
+    std::cout <<"  liaison --serve <Path to FMU> <Responder Id>\n";
+    std::cout <<"  liaison --make-fmu <Path to FMU> <Responder Id>\n";
+    std::cout <<"  liaison --make-fmu <Path to FMU> <Responder Id> --debug\n";
+    std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
+    std::cout <<"  liaison --make-fmu <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
+    std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --python-env <Path to Python environment>\n";
+    std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --pyhton-lib <Path to Python library>\n";
 }
 
+#ifdef _WIN32
+#include <filesystem>
+std::string findPythonLib(const std::string& libDir) {
+    for (const auto& entry : std::filesystem::directory_iterator(libDir)) {
+        std::string filename = entry.path().filename().string();
+        if (filename.find("python3") != std::string::npos &&
+            filename.find(".dll") != std::string::npos) {
+            return entry.path().string();
+        }
+    }
+    return "";
+}
+#else
 std::string findPythonLib(const std::string& libDir) {
     DIR* dir = opendir(libDir.c_str());
     if (!dir) {
@@ -926,77 +973,99 @@ std::string findPythonLib(const std::string& libDir) {
     closedir(dir);
     return foundLib;
 }
+#endif
+
 
 
 int main(int argc, char* argv[]) {
-    // Parse command line arguments
-    if (argc < 4) {
-        printUsage();
-        return 1;
-    }
-    std::string option = argv[1];
-    std::string fmuPath = argv[2];
-    std::string responderId = argv[3];
-
-    // Parse optional flags
-    std::string zenohConfigPath;
-    std::string pythonEnvPath;
-    std::string pythonLibPath;
-    for (int i = 4; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--debug") {
-            debug = true;
-        } else if (arg == "--zenoh-config" && i + 1 < argc) {
-            zenohConfigPath = argv[++i];
-        } else if (arg == "--python-env" && i + 1 < argc) {
-            pythonEnvPath = argv[++i];
-        } else if (arg == "--python-lib" && i + 1 < argc) {
-            pythonLibPath = argv[++i];
-        } else {
-            std::cerr << "Unknown argument: " << arg << "\n";
-            printUsage();
-            return 1;
-        }
-    }
-
-    if (!pythonEnvPath.empty() && !pythonLibPath.empty()) {
-        std::cout << "The argument --python-env cannot be used together with --python-lib. Ignoring --python-lib.\n";
-    }
-
-    // Re-execute the process if either python-env or python-lib flag is provided,
-    // but only if it hasn't been already re-executed.
-    if (getenv("LIAISON_RELAUNCHED") == nullptr && (!pythonEnvPath.empty() || !pythonLibPath.empty())) {
-        if (!pythonEnvPath.empty()) {
-            pythonLibPath = findPythonLib(pythonEnvPath + "/lib");
-           }
-        if (!pythonLibPath.empty()) {
-            setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
-        }
-        // Set a marker to prevent reexecution.
-        setenv("LIAISON_RELAUNCHED", "1", 1);
-
-        // Rebuild the argument list for execvp and pass all original arguments to the new process.
-        execvp(argv[0], argv);
-
-        perror("execvp failed");
-        return 1;
-    } 
-    if ((getenv("LIAISON_RELAUNCHED") != nullptr) && debug) {
-        std::cout << "Liaison re-executed to preload the Python shared library:\n";
-        std::cout << getenv("LD_PRELOAD") << std::endl;
-    }
-
     try {
+        // Parse command line arguments
+        if (argc < 4) {
+            throw std::invalid_argument("Invalid number of arguments.");
+        }
+        std::string option = argv[1];
+        std::string fmuPath = argv[2];
+        std::string responderId = argv[3];
+
+        // Parse optional flags
+        std::string zenohConfigPath;
+        std::string pythonEnvPath;
+        std::string pythonLibPath;
+        for (int i = 4; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--debug") {
+                debug = true;
+            } else if (arg == "--zenoh-config" && i + 1 < argc) {
+                zenohConfigPath = argv[++i];
+            } else if (arg == "--python-env" && i + 1 < argc) {
+                pythonEnvPath = argv[++i];
+            } else if (arg == "--python-lib" && i + 1 < argc) {
+                pythonLibPath = argv[++i];
+            } else {
+                std::ostringstream oss;
+                oss << "Unknown argument: " << arg;
+                throw std::invalid_argument(oss.str());
+            }
+        }
+
+        if (!pythonEnvPath.empty() && !pythonLibPath.empty()) {
+            spdlog::warn("The arguments '--python-env' and '--python-lib' cannot be used together. Ignoring '--python-lib'");
+        }
+
+        // Re-execute the process if either python-env or python-lib flag is provided,
+        // but only if it hasn't been already re-executed.
+        if (getenv("LIAISON_RELAUNCHED") == nullptr && (!pythonEnvPath.empty() || !pythonLibPath.empty())) {
+        
+            if (!pythonEnvPath.empty()) {
+                pythonLibPath = findPythonLib(pythonEnvPath + "/lib");
+            }
+            if (!pythonLibPath.empty()) {
+                #ifdef _WIN32
+                _putenv_s("LD_PRELOAD", pythonLibPath.c_str());
+                #else
+                setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
+                #endif
+            }
+            // Set a marker to prevent reexecution.
+            setenv("LIAISON_RELAUNCHED", "1", 1);
+
+            // Rebuild the argument list and pass all original arguments to the new process.
+            #ifdef _WIN32
+            STARTUPINFO si = {sizeof(STARTUPINFO)};
+            PROCESS_INFORMATION pi;
+            if (!CreateProcess(NULL, GetCommandLine(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+                std::cerr << "CreateProcess failed with error: " << GetLastError() << std::endl;
+                return 1;
+            }
+            WaitForSingleObject(pi.hProcess, INFINITE);
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+            #else
+            execvp(argv[0], argv);
+            #endif
+            // If we reach this point, the re-execution failed.
+            throw std::runtime_error("Re-execution to preload the Python shared library failed."); 
+        } 
+
+        if ((getenv("LIAISON_RELAUNCHED") != nullptr) && debug) {
+            spdlog::debug("Re-executed to preload the Python shared library: {}",getenv("LD_PRELOAD"));
+        }
+    
         if (option == "--serve") {
             startServer(fmuPath, responderId, zenohConfigPath);
         } else if (option == "--make-fmu") {
-            generateFmu(fmuPath, responderId, zenohConfigPath);
+            makeFmu(fmuPath, responderId, zenohConfigPath);
         } else {
-            printUsage();
-            return 1;
+            std::ostringstream oss;
+            oss << "Unknown argument:: " << option;
+            throw std::invalid_argument(oss.str());
         }
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+    } catch (const std::runtime_error& e) {
+        spdlog::error(e.what());
+        return 1;
+    } catch (const std::invalid_argument& e) {
+        spdlog::error(e.what());
+        printUsage();
         return 1;
     }
 

@@ -245,7 +245,7 @@ void StartZenohSession() {
     try {
         readConfigFile();
     } catch (const std::runtime_error& e) {
-        throw std::runtime_error(std::string("Could not read responderId file - ") + e.what());
+        throw std::runtime_error(std::string("Could not read configuration file - ") + e.what());
     }
     // Start Zenoh Session
     try {
@@ -253,13 +253,13 @@ void StartZenohSession() {
         std::string zenohConfigPath = baseDirectory + "/zenoh_config.json";
         bool zenohConfigExists = std::filesystem::exists(zenohConfigPath);
         if (zenohConfigExists && debug) {
-            std::cout << "Zenoh config file found." << std::endl;
+            std::cout << "Using custom Zenoh configuration ..." << std::endl;
         } 
-        zenoh::Config zenohConfig = std::filesystem::exists(zenohConfigPath) ? zenoh::Config::from_file(zenohConfigPath) : zenoh::Config::create_default();
+        zenoh::Config zenohConfig = zenohConfigExists ? zenoh::Config::from_file(zenohConfigPath) : zenoh::Config::create_default();
         session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(zenohConfig)));
         std::cout << "Zenoh Session started successfully." << std::endl;
-    } catch (const std::exception &e) {
-        throw std::runtime_error(std::string("Failed to start Zenoh Session - ") + e.what());
+    } catch (const zenoh::ZException& e) {
+        throw std::runtime_error(e.what());
     }
 }
 
