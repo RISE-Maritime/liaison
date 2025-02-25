@@ -7,7 +7,9 @@
 #include <cstdarg>
 #include <cstdio>
 #include <iostream>
+#include <spdlog/spdlog.h>
 #include "utils.hpp"
+
 
 void fmi3LogMessage(fmi3InstanceEnvironment instanceEnvironment,
                     fmi3Status status,
@@ -126,17 +128,16 @@ std::string unzipFmu(const std::string& fmuPath) {
 }
 
 
-bool addFileToZip(zip_t* zipArchive, const std::string& filePath, const std::string& archiveName) {
+void addFileToFmu(zip_t* zipArchive, const std::string& filePath, const std::string& archiveName) {
     if (!std::filesystem::exists(filePath)) {
-        std::cerr << "File does not exist: " << filePath << std::endl;
-        return false;
+        std::ostringstream oss;
+        oss << "File '"<< filePath << "' does not exist.";
+        throw std::runtime_error(oss.str());
+        
     }
-    
     zip_source_t* source = zip_source_file(zipArchive, filePath.c_str(), 0, 0);
     if (!source || zip_file_add(zipArchive, archiveName.c_str(), source, ZIP_FL_OVERWRITE) < 0) {
         zip_source_free(source);
-        std::cerr << "Failed to add " << archiveName << " to zip archive" << std::endl;
-        return false;
+        throw std::runtime_error(zip_strerror(zipArchive));
     }
-    return true;
 }
