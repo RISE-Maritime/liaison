@@ -386,6 +386,11 @@ message fmi3SetDebugLoggingMessage {
     repeated string categories = 4;
 }
 
+message logMessage {
+  Status status = 1;
+  string category = 2;
+  string message = 3;
+}
 
 message Empty {
     int32 value = 1;

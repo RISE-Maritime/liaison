@@ -16,8 +16,6 @@ class BouncingBall(Fmi3Slave):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.log("Starting to initaitiasdasfs", Fmi3Status.ok)
-
         self.author = "..."
         self.description = "Bouncing Ball"
 
@@ -105,6 +103,7 @@ class BouncingBall(Fmi3Slave):
         self.register_variable(
             Float64("v_min", variability=Fmi3Variability.constant, start=0.1)
         )
+        self.log("Created BouncingBall instance", Fmi3Status.ok)
 
     def do_step(self, current_time, step_size):
         self.derv = self.g
