@@ -7,41 +7,9 @@
 #include <cstdarg>
 #include <cstdio>
 #include <iostream>
-#include <spdlog/spdlog.h>
 #include "utils.hpp"
 
 
-void fmi3LogMessage(fmi3InstanceEnvironment instanceEnvironment,
-                    fmi3Status status,
-                    fmi3String category,
-                    fmi3String message
-                    ) {
-
-    switch (status) {
-        case fmi3OK:
-            std::cout << "OK: ";
-            break;
-        case fmi3Warning:
-            std::cout << "Warning: ";
-            break;
-        case fmi3Discard:
-            std::cout << "Discard: ";
-            break;
-        case fmi3Error:
-            std::cout << "Error: ";
-            break;
-        case fmi3Fatal:
-            std::cout << "Fatal: ";
-            break;
-        default:
-            std::cout << "Unknown status: ";
-            break;
-    }
-
-    std::cout << "[" << category << "] ";
-
-    std::cout << message << std::endl;
-}
 
 
 void createDirectories(const std::string& path) {

@@ -117,12 +117,32 @@ fmi3Status fmi3Get##TYPE( \
 
 #define QUERY_VOID(fmi3Function, input, output, responderId) \
     BASE_QUERY(fmi3Function, input, output, responderId, ) \
-   
+
+#define LOG_MESSAGE_HANDLING(logMessage, instanceEnvironment, responderId) \
+    auto logMessageCallback = [logMessage, instanceEnvironment](const zenoh::Sample& sample) { \
+        proto::logMessage log_message; \
+        const auto wire = sample.get_payload().as_vector(); \
+        log_message.ParseFromArray(wire.data(), wire.size()); \
+        logMessage( \
+            instanceEnvironment, \
+            transformToFmi3Status(log_message.status()), \
+            log_message.category().c_str(), \
+            log_message.message().c_str() \
+        ); \
+    }; \
+    auto dropCallback = []() { \
+    }; \
+    std::string expr_fmi3LogMessage = "rpc/" + responderId + "/fmi3LogMessage"; \
+    zenoh::KeyExpr keyexpr_fmi3LogMessage(expr_fmi3LogMessage); \
+    fmi3LogMessageSubscriber = std::make_shared<zenoh::Subscriber<void>>( \
+        session->declare_subscriber(keyexpr_fmi3LogMessage, logMessageCallback, dropCallback) \
+    );  \
 
 // end of MACROS
 
 bool debug=false;
 std::unique_ptr<zenoh::Session> session;
+std::shared_ptr<zenoh::Subscriber<void>> fmi3LogMessageSubscriber;
 
 class Placeholder {
 public:
@@ -252,12 +272,8 @@ void StartZenohSession() {
         std::string baseDirectory = getBaseDirectory();
         std::string zenohConfigPath = baseDirectory + "/zenoh_config.json";
         bool zenohConfigExists = std::filesystem::exists(zenohConfigPath);
-        if (zenohConfigExists && debug) {
-            std::cout << "Using custom Zenoh configuration ..." << std::endl;
-        } 
         zenoh::Config zenohConfig = zenohConfigExists ? zenoh::Config::from_file(zenohConfigPath) : zenoh::Config::create_default();
         session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(zenohConfig)));
-        std::cout << "Zenoh Session started successfully." << std::endl;
     } catch (const zenoh::ZException& e) {
         throw std::runtime_error(e.what());
     }
@@ -304,7 +320,6 @@ fmi3Status fmi3SetDebugLogging(
 }
 
 
-
 /* Creation and destruction of FMU instances */
 
 fmi3Instance fmi3InstantiateModelExchange(
@@ -319,10 +334,12 @@ fmi3Instance fmi3InstantiateModelExchange(
     try {
         StartZenohSession();
     } catch (const std::exception& e) {
-        std::cerr << "Failed to start Zenoh Session - " << e.what() << std::endl;
+        logMessage(instanceEnvironment, fmi3Error, "Zenoh", e.what());
         return nullptr;
     }
     
+    LOG_MESSAGE_HANDLING(logMessage, instanceEnvironment, responderId)
+
     proto::fmi3InstantiateModelExchangeMessage input;
     proto::fmi3InstanceMessage output;
 
@@ -333,8 +350,6 @@ fmi3Instance fmi3InstantiateModelExchange(
     input.set_logging_on(loggingOn);
 
     QUERY_INSTANCE("fmi3InstantiateModelExchange", input, output, responderId)
-
-    std::cout << "Instance: " << output.instance_index() << std::endl;
 
     Placeholder* placeholder = new Placeholder(output.instance_index());
     return reinterpret_cast<fmi3Instance>(placeholder);
@@ -354,16 +369,17 @@ fmi3Instance fmi3InstantiateCoSimulation(
     fmi3InstanceEnvironment        instanceEnvironment,
     fmi3LogMessageCallback         logMessage,
     fmi3IntermediateUpdateCallback intermediateUpdate) {
-    // TODO: implement the usage of fmi3InstanceEnvironment, fmi3LogMessageCallback
+    // TODO: implement the usage of fmi3InstanceEnvironment,
     // and fmi3IntermediateUpdateCallback.
-
     
     try {
         StartZenohSession();
     } catch (const std::exception& e) {
-        std::cerr << "Failed to start Zenoh Session - " << e.what() << std::endl;
+        logMessage(instanceEnvironment, fmi3Error, "Zenoh", e.what());
         return nullptr;
     }
+    
+    LOG_MESSAGE_HANDLING(logMessage, instanceEnvironment, responderId)
    
     proto::fmi3InstantiateCoSimulationMessage input;
     proto::fmi3InstanceMessage output;
@@ -381,8 +397,6 @@ fmi3Instance fmi3InstantiateCoSimulation(
     input.set_n_required_intermediate_variables(nRequiredIntermediateVariables);
     
     QUERY_INSTANCE("fmi3InstantiateCoSimulation", input, output, responderId)
-
-    std::cout << "Instance: " << output.instance_index() << std::endl;
 
     Placeholder* placeholder = new Placeholder(output.instance_index());
     return reinterpret_cast<fmi3Instance>(placeholder);
@@ -404,9 +418,11 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     try {
         StartZenohSession();
     } catch (const std::exception& e) {
-        std::cerr << "Failed to start Zenoh Session - " << e.what() << std::endl;
+        logMessage(instanceEnvironment, fmi3Error, "Zenoh", e.what());
         return nullptr;
     }
+    
+    LOG_MESSAGE_HANDLING(logMessage, instanceEnvironment, responderId)
 
     proto::fmi3InstantiateScheduledExecutionMessage input;
     proto::fmi3InstanceMessage output;
@@ -419,8 +435,6 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     // TODO: implement functionality for instanceEnvironment, clockUpdate, lockPeemption, and unlockPreemption
 
     QUERY_INSTANCE("fmi3InstantiateScheduledExecution", input, output, responderId)
-
-    std::cout << "Instance: " << output.instance_index() << std::endl;
 
     Placeholder* placeholder = new Placeholder(output.instance_index());
     return reinterpret_cast<fmi3Instance>(placeholder);

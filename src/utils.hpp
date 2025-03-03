@@ -7,11 +7,6 @@
 
 #include "fmi3Functions.h"
 
-void fmi3LogMessage(fmi3InstanceEnvironment instanceEnvironment,
-                    fmi3Status status,
-                    fmi3String category,
-                    fmi3String message
-                    );
 
 void createDirectories(const std::string& path);
 
