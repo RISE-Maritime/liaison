@@ -184,6 +184,18 @@ const fmi3ValueReference* convertRepeatedFieldToCArray(const google::protobuf::R
     return cArray;
 }
 
+const char** convertRepeatedFieldToCArray(const google::protobuf::RepeatedPtrField<std::string>& repeatedField) {
+    size_t size = repeatedField.size();
+    char** cArray = new char*[size];
+
+    for (size_t i = 0; i < size; ++i) {
+        cArray[i] = new char[repeatedField.Get(i).size() + 1];  
+        std::strcpy(cArray[i], repeatedField.Get(i).c_str());   
+    }
+    return const_cast<const char**>(cArray);
+}
+
+
 void printQuery(const zenoh::Query& query) {
     spdlog::debug("Query: {}", query.get_keyexpr().as_string_view());
 }
@@ -220,6 +232,7 @@ proto::fmi3StatusMessage makeFmi3StatusMessage(fmi3Status status) {
 }
 
 namespace fmu {
+    fmi3SetDebugLoggingTYPE* fmi3SetDebugLogging;
     fmi3InstantiateCoSimulationTYPE* fmi3InstantiateCoSimulation;
     fmi3InstantiateModelExchangeTYPE* fmi3InstantiateModelExchange;
     fmi3InstantiateScheduledExecutionTYPE* fmi3InstantiateScheduledExecution;
@@ -298,9 +311,24 @@ namespace callbacks {
         std::vector<uint8_t> output_wire(log_message.ByteSizeLong()); 
         log_message.SerializeToArray(output_wire.data(), output_wire.size()); 
         fmi3LogMessagePublisher->put(zenoh::Bytes(std::move(output_wire)));
-        spdlog::info("Published log message to zenoh: {}", message);
     }
 
+    void fmi3SetDebugLogging(const zenoh::Query& query) {
+        printQuery(query);
+
+        proto::fmi3SetDebugLoggingMessage input;
+        PARSE_QUERY(query, input)
+
+        fmi3Status status = fmu::fmi3SetDebugLogging(
+            getInstance(input.instance_index()),
+            input.logging_on(),
+            input.n_categories(),
+            convertRepeatedFieldToCArray(input.categories())
+        );
+
+        proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
+        SERIALIZE_REPLY(query, output)
+    }
 
     void fmi3InstantiateCoSimulation(const zenoh::Query& query) {
         printQuery(query);
@@ -727,6 +755,7 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
     auto fmuLibrary = loadFmuLibrary(libPath);
 
     // Bind FMU library functions
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetDebugLogging)
     BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateCoSimulation)
     BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateModelExchange)
     BIND_FMU_LIBRARY_FUNCTION(fmi3InstantiateScheduledExecution)
@@ -774,6 +803,7 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
     fmi3LogMessagePublisher = std::make_shared<zenoh::Publisher>(session->declare_publisher(keyexpr_fmi3LogMessage));
 
     // Queryable declarations
+    DECLARE_QUERYABLE(fmi3SetDebugLogging, responderId) 
     DECLARE_QUERYABLE(fmi3InstantiateCoSimulation, responderId)
     DECLARE_QUERYABLE(fmi3InstantiateModelExchange, responderId)
     DECLARE_QUERYABLE(fmi3InstantiateScheduledExecution, responderId)
