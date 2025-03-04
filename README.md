@@ -85,14 +85,34 @@ The following is an example of Zenoh configuration JSON file using TLS. The `*.p
 
 ### Debug
 
-The flag `--debug` can be used so that the output of either is extra verbose to facilitate debbuging.
+The flag `--debug` can be used so that the output is extra verbose to facilitate debbuging.
 
 ```bash
-./liaison --make-fmu ../tests/BouncingBall.fmu fmus/bouncingball --debug
+./liaison --serve ./tests/BouncingBall.fmu fmus/bouncingball --debug
 ```
 
+### Python FMUs
+
+If the FMU depends on a Python environment, the Python environment (e.g. Conda or virtualenv) or Python library can be declared by using either the `--python-env` or `--python-lib` flags.
+
+**Python environment**
+
+Conda
+
 ```bash
-./liaison --serve ../tests/BouncingBall.fmu fmus/bouncingball --debug
+./liaison --serve ./BouncingBall.fmu fmus/bouncingball --python-env /home/user/miniconda3/envs/bouncingball
+```
+
+Virtualenv
+
+```bash
+./liaison --serve ./BouncingBall.fmu fmus/bouncingball --python-env /home/user/.virualenvs/bouncingball
+```
+
+**Python library**
+
+```bash
+./liaison --serve ./BouncingBall.fmu fmus/bouncingball --python-lib /usr/lib/x86_64-linux-gnu/libpython3.8.so
 ```
 
 ## Development

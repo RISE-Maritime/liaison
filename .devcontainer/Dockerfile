@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV ZENOH_VERSION=1.0.0
 ENV PROTOBUF_VERSION=3.20.1
 ENV LIBZIP_VERSION=1.10.1
+ENV SPDLOG_VERSION=v1.15.1
 
 # Install required packages
 RUN apt-get update && apt-get install -y \
@@ -26,7 +27,7 @@ RUN rm -rf /var/lib/apt/lists/*
 
 
 # Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain 1.81.0 -y \
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain 1.75.0 -y \
     && echo 'source $HOME/.cargo/env' >> ~/.bashrc
 
 # Ensure the path is set for future commands in the Dockerfile
@@ -48,6 +49,12 @@ RUN git clone --depth 1 --branch ${ZENOH_VERSION} https://github.com/eclipse-zen
 WORKDIR /workspaces/zenoh-cpp/build
 RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=FALSE && \
     cmake --build . --target install 
+
+# Build and install Spdlog
+RUN git clone --depth 1 --branch ${SPDLOG_VERSION} https://github.com/gabime/spdlog.git /workspaces/spdlog
+WORKDIR /workspaces/spdlog/build
+RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DSPDLOG_BUILD_SHARED=FALSE && \
+    cmake --build . --target install
     
 # Download and build Protobuf from source
 RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-cpp-${PROTOBUF_VERSION}.tar.gz && \
@@ -88,4 +95,4 @@ USER ${USERNAME}
 # Copy the workspace files to the container
 COPY . /workspaces
 
-CMD ["/bin/bash"]
+CMD ["bash"]

@@ -42,6 +42,10 @@ else()
     include_directories(${zlib_INCLUDE_DIRS})
 endif()
 
+# Include spdlog
+set(SPDLOG_STATIC_LIB ON)
+find_package(spdlog REQUIRED)
+
 # Include directories with header files
 include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}                   # For generated protobuf files
@@ -57,6 +61,7 @@ if (WIN32)
     target_link_libraries(liaison PRIVATE
         zenohcxx::zenohc
         protobuf::libprotobuf
+        spdlog::spdlog
         libzip::zip
         ZLIB::ZLIB
     )
@@ -64,6 +69,7 @@ else()
     target_link_libraries(liaison PRIVATE
         zenohcxx::zenohc
         protobuf::libprotobuf
+        spdlog::spdlog
         ${libzip_LIBRARIES}
         ${zlib_LIBRARIES}
         -static-libgcc
