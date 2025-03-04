@@ -1117,8 +1117,11 @@ int main(int argc, char* argv[]) {
                 #endif
             }
             // Set a marker to prevent reexecution.
+            #ifdef _WIN32
+            _putenv_s("LIAISON_RELAUNCHED", "1");
+            #else
             setenv("LIAISON_RELAUNCHED", "1", 1);
-
+            #endif
             // Rebuild the argument list and pass all original arguments to the new process.
             #ifdef _WIN32
             STARTUPINFO si = {sizeof(STARTUPINFO)};
