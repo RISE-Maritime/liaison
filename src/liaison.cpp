@@ -3,14 +3,15 @@
 #undef ERROR
 #else
 #include <dlfcn.h>
+#include <dirent.h>
 #include <unistd.h>
 #endif
 #include <vector>
 #include <sys/stat.h>
 #include <unordered_map>
 #include <filesystem>
+#include <sstream>
 #include <zip.h>
-#include <dirent.h>
 #include <iostream>
 #include <memory>
 
