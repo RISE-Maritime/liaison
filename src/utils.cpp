@@ -3,9 +3,11 @@
 #endif
 #include <vector> 
 #include <filesystem>
+#include <sstream>
 #include <zip.h>
 #include <cstdarg>
 #include <cstdio>
+#include <stdexcept>
 #include <iostream>
 #include "utils.hpp"
 
