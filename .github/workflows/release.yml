@@ -65,6 +65,7 @@ jobs:
           vcpkg install protobuf:x64-windows-static 
           vcpkg install zlib:x64-windows-static
           vcpkg install libzip:x64-windows-static
+          vcpkg install spdlog:x64-windows-static
 
       - name: Build and install Zenoh-c
         run: |
