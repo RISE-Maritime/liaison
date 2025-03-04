@@ -857,8 +857,18 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
         }
     }
 
+    // Reset shared pointers
+    resourcePath.reset();
+    session.reset();
+    fmi3LogMessagePublisher.reset();
+
     // Unload the FMU library before exiting
-    unloadFmuLibrary(fmuLibrary);
+    if (fmuLibrary) {
+        unloadFmuLibrary(fmuLibrary);
+        fmuLibrary = nullptr;
+    }
+
+
 
     return 0;
 }
@@ -1072,6 +1082,7 @@ int main(int argc, char* argv[]) {
             std::string arg = argv[i];
             if (arg == "--debug") {
                 debug = true;
+                zenoh::init_log_from_env_or("debug");
                 spdlog::set_level(spdlog::level::debug);
             } else if (arg == "--zenoh-config" && i + 1 < argc) {
                 zenohConfigPath = argv[++i];
@@ -1145,6 +1156,9 @@ int main(int argc, char* argv[]) {
     } catch (const std::invalid_argument& e) {
         spdlog::error(e.what());
         printUsage();
+        return 1;
+    } catch (...) {
+        spdlog::error("An unknown error occurred.");
         return 1;
     }
 
