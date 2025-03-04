@@ -27,7 +27,7 @@ RUN rm -rf /var/lib/apt/lists/*
 
 
 # Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain 1.81.0 -y \
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain 1.75.0 -y \
     && echo 'source $HOME/.cargo/env' >> ~/.bashrc
 
 # Ensure the path is set for future commands in the Dockerfile
