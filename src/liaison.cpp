@@ -1026,7 +1026,7 @@ void printUsage() {
     std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
     std::cout <<"  liaison --make-fmu <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
     std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --python-env <Path to Python environment>\n";
-    std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --pyhton-lib <Path to Python library>\n";
+    std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --python-lib <Path to Python library>\n";
 }
 
 #ifdef _WIN32
