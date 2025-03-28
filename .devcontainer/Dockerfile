@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     pkg-config \
     python3 \
+    python3-dev \
     python3-pip 
 RUN rm -rf /var/lib/apt/lists/*
 
@@ -95,4 +96,4 @@ USER ${USERNAME}
 # Copy the workspace files to the container
 COPY . /workspaces
 
-CMD ["bash"]
+CMD ["/bash"]

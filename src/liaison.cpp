@@ -14,6 +14,7 @@
 #include <zip.h>
 #include <iostream>
 #include <memory>
+#include <Python.h>
 
 #include "zenoh.hxx"
 #include "fmi3.pb.h"
