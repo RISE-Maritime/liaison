@@ -22,7 +22,6 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     pkg-config \
     python3 \
-    python3-dev \
     python3-pip 
 RUN rm -rf /var/lib/apt/lists/*
 
@@ -89,11 +88,12 @@ RUN python3 -m pip install fmpy[complete]==0.3.20
 
 # Create a non-root user 
 ENV USERNAME=developer
-RUN useradd -m $USERNAME
+RUN useradd -m -s /bin/bash $USERNAME
+RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER ${USERNAME}
 
 # Copy the workspace files to the container
 COPY . /workspaces
 
-CMD ["/bash"]
+CMD ["/bin/bash"]
