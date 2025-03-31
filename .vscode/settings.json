@@ -100,6 +100,7 @@
     "memory_resource": "cpp",
     "string_view": "cpp",
     "numbers": "cpp",
-    "semaphore": "cpp"
+    "semaphore": "cpp",
+    "complex": "cpp"
   }
 }
