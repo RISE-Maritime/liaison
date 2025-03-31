@@ -88,11 +88,12 @@ RUN python3 -m pip install fmpy[complete]==0.3.20
 
 # Create a non-root user 
 ENV USERNAME=developer
-RUN useradd -m $USERNAME
+RUN useradd -m -s /bin/bash $USERNAME
+RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER ${USERNAME}
 
 # Copy the workspace files to the container
 COPY . /workspaces
 
-CMD ["bash"]
+CMD ["/bin/bash"]
