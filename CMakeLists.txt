@@ -46,6 +46,12 @@ endif()
 set(SPDLOG_STATIC_LIB ON)
 find_package(spdlog REQUIRED)
 
+# Include nlohmann/json¨
+include(FetchContent)
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
+FetchContent_MakeAvailable(json)
+
+
 # Include directories with header files
 include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}                   # For generated protobuf files
@@ -64,12 +70,14 @@ if (WIN32)
         spdlog::spdlog
         libzip::zip
         ZLIB::ZLIB
+        nlohmann_json::nlohmann_json
     )
 else()
     target_link_libraries(liaison PRIVATE
         zenohcxx::zenohc
         protobuf::libprotobuf
         spdlog::spdlog
+        nlohmann_json::nlohmann_json
         ${libzip_LIBRARIES}
         ${zlib_LIBRARIES}
         -static-libgcc
@@ -108,4 +116,5 @@ endforeach()
 target_link_libraries(liaisonfmu PRIVATE
     zenohcxx::zenohc
     protobuf::libprotobuf
+    nlohmann_json::nlohmann_json
 )

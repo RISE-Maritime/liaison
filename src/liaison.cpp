@@ -21,6 +21,8 @@
 #include <spdlog/spdlog.h>
 #include "utils.hpp"
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 // MACROS
 
@@ -875,23 +877,6 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
 }
 
 
-std::string createLiaisonConfigFile(const std::string& directory, const std::string& responderId) {
-    std::filesystem::path filePath = std::filesystem::path(directory) / "responderId";
-
-    std::ofstream file(filePath);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to create Liaison config file at: " + filePath.string());
-    }
-    file << "responderId='" << responderId << "'\n";
-    file.close();
-
-    // Verify 
-    if (!std::filesystem::exists(filePath)) {
-        throw std::runtime_error("Failed to create Liaison config file at: " + filePath.string());
-    }
-    return filePath.string();
-}
-
 void makeFmu(const std::string& fmuPath, const std::string& responderId, const std::string& zenohConfigPath) {
     spdlog::info("\n"
              "====================================\n"
@@ -927,6 +912,11 @@ void makeFmu(const std::string& fmuPath, const std::string& responderId, const s
 
     // Add the renamed DLL files to the FMU inside the binaries/platform directory
     size_t nDynamicLibraryErrors = 0;
+    std::filesystem::path binariesPath("./binaries");
+    if (!std::filesystem::exists(binariesPath)) {
+        zip_discard(fmu);
+        throw std::runtime_error("Required directory './binaries' does not exist.");
+    }
     std::string originalLinuxDynamicLibraryPath ="./binaries/x86_64-linux/libliaisonfmu.so";
     std::string renamedLinuxDynamicLibraryPath = "binaries/x86_64-linux/" + modelName + ".so";
     try {
@@ -965,45 +955,101 @@ void makeFmu(const std::string& fmuPath, const std::string& responderId, const s
         throw std::runtime_error(oss.str());
     }
 
-    // Add the config file the FMU at the base directory
-    std::string liaisonConfigFilePath = createLiaisonConfigFile(tempPath, responderId);
+    // Read the zenoh config file
+    json zenohConfig;
+    if (!zenohConfigPath.empty()) {
+        zenohConfig = json::parse(std::ifstream(zenohConfigPath));
+        zenohConfig["metadata"]["name"] = modelName;
+
+        // Determine if pem files are used
+        if (zenohConfig.contains("transport") && 
+            zenohConfig["transport"].contains("link") && 
+            zenohConfig["transport"]["link"].contains("tls")) {
+            
+            json& tls = zenohConfig["transport"]["link"]["tls"];
+            
+            // Use value() method with default empty string if key doesn't exist
+            std::string connectCertificatePath = tls.value("connect_certificate", "");
+            std::string connectPrivateKeyPath = tls.value("connect_private_key", "");
+            std::string rootCaCertificatePath = tls.value("root_ca_certificate", "");
+            
+            // Only log if we have actual values
+            if (!connectCertificatePath.empty()) {
+                if (!std::filesystem::exists(connectCertificatePath)) {
+                    std::ostringstream oss;
+                    oss << "Connect certificate file does not exist at: " << connectCertificatePath;
+                    throw std::runtime_error(oss.str());
+                }
+                std::string connectCertificateFileName = std::filesystem::path(connectCertificatePath).filename().string();
+                try {
+                    addFileToFmu(fmu, connectCertificatePath, "binaries/" + connectCertificateFileName);
+                    tls["connect_certificate"] = connectCertificateFileName;
+                    spdlog::info("  Added : {}", connectCertificateFileName);
+                } catch (std::runtime_error& error) {
+                    zip_discard(fmu);
+                    std::ostringstream oss;
+                    oss << "Failed adding connect certificate file to the Liaison FMU: " << error.what();
+                    throw std::runtime_error(oss.str());
+                }
+            }
+            if (!connectPrivateKeyPath.empty()){
+                if (!std::filesystem::exists(connectPrivateKeyPath)) {
+                    std::ostringstream oss;
+                    oss << "Connect private key file does not exist at: " << connectPrivateKeyPath;
+                    throw std::runtime_error(oss.str());
+                }
+                std::string connectPrivateKeyFileName = std::filesystem::path(connectPrivateKeyPath).filename().string();
+                try {
+                    addFileToFmu(fmu, connectPrivateKeyPath, "binaries/" + connectPrivateKeyFileName);
+                    tls["connect_private_key"] = connectPrivateKeyFileName;
+                    spdlog::info("  Added : {}", connectPrivateKeyFileName);
+                } catch (std::runtime_error& error) {
+                    zip_discard(fmu);
+                    std::ostringstream oss;
+                    oss << "Failed adding connect private key file to the Liaison FMU: " << error.what();
+                    throw std::runtime_error(oss.str());
+                }
+            }
+            if (!rootCaCertificatePath.empty()){
+                if (!std::filesystem::exists(rootCaCertificatePath)) {
+                    std::ostringstream oss;
+                    oss << "Root ca certificate file does not exist at: " << rootCaCertificatePath;
+                    throw std::runtime_error(oss.str());
+                }
+                std::string rootCaCertificateFileName = std::filesystem::path(rootCaCertificatePath).filename().string();
+                try {
+                    addFileToFmu(fmu, rootCaCertificatePath, "binaries/" + rootCaCertificateFileName);
+                    tls["root_ca_certificate"] = rootCaCertificateFileName;
+                    spdlog::info("  Added : {}", rootCaCertificateFileName);
+                } catch (std::runtime_error& error) {
+                    zip_discard(fmu);
+                    std::ostringstream oss;
+                    oss << "Failed adding root CA certificate file to the Liaison FMU: " << error.what();
+                    throw std::runtime_error(oss.str());
+                }
+            }
+        }
+    }
+
+    // Create the config file
+    json config;
+    config["responderId"] = responderId;
+    config["name"] = modelName;
+    if (!zenohConfig.empty()) {
+        config["zenohConfig"] = zenohConfig;
+    }
+    std::string configFilePath = tempPath + "/config.json";
+    std::ofstream o(configFilePath);
+    o << std::setw(4) << config << std::endl;
+    o.close();
+
     try {
-        addFileToFmu(fmu, liaisonConfigFilePath, "binaries/config");
+        addFileToFmu(fmu, configFilePath, "binaries/config.json");
     } catch (std::runtime_error& error) {
         zip_discard(fmu);
         std::ostringstream oss;
         oss << "Failed adding Liaison config file to the Liaison FMU: " << error.what();
         throw std::runtime_error(oss.str());
-    }
-
-    // Add the Zenoh config file to the FMU at the base directory
-    if (!zenohConfigPath.empty()) {
-        try {
-            addFileToFmu(fmu, zenohConfigPath, "binaries/zenoh_config.json");
-        } catch (std::runtime_error& error) {
-            zip_discard(fmu);
-            std::ostringstream oss;
-            oss << "Failed adding Zenoh config file to the Liaison FMU: " << error.what();
-            throw std::runtime_error(oss.str());
-        }
-    }
-
-    // Add any files with the extension .pem present in the zenoh config directory
-    if (!zenohConfigPath.empty()) {
-        std::filesystem::path zenohConfigDir = std::filesystem::path(zenohConfigPath).parent_path();
-        for (const auto& entry : std::filesystem::directory_iterator(zenohConfigDir)) {
-            if (entry.path().extension() == ".pem") { 
-                try {
-                    addFileToFmu(fmu, entry.path().string(), "binaries/" + entry.path().filename().string()); 
-                    spdlog::info("  PEM file: {}", entry.path().string());
-                } catch (std::runtime_error& error) {
-                    zip_discard(fmu);
-                    std::ostringstream oss;
-                    oss << "Failed adding PEM file to the Liaison FMU: " << error.what();
-                    throw std::runtime_error(oss.str());
-                }
-            }
-        }
     }
 
     // Close the zip archive
@@ -1081,14 +1127,6 @@ void loadPythonLibFromVenv(const std::string& venvPath) {
     spdlog::debug("Using Python home: {}", homePath);
     spdlog::debug("Using Python version: {}", version);
    
-
-    // Set PYTHONHOME to venvPath
-#ifdef _WIN32
-    _putenv_s("PYTHONHOME", venvPath.c_str());
-#else
-    setenv("PYTHONHOME", venvPath.c_str(), 1);
-#endif
-
     // Set PYTHONPATH to site-packages within venvPath
 #ifdef _WIN32
     std::string pythonPath = venvPath + "\\Lib\\site-packages";
@@ -1149,7 +1187,6 @@ int main(int argc, char* argv[]) {
         // Parse optional flags
         std::string zenohConfigPath;
         std::string pythonEnvPath;
-        std::string pythonLibPath;
         for (int i = 4; i < argc; ++i) {
             std::string arg = argv[i];
             if (arg == "--debug") {
@@ -1158,8 +1195,18 @@ int main(int argc, char* argv[]) {
                 spdlog::set_level(spdlog::level::debug);
             } else if (arg == "--zenoh-config" && i + 1 < argc) {
                 zenohConfigPath = argv[++i];
+                if (!std::filesystem::exists(zenohConfigPath)) {
+                    std::ostringstream oss;
+                    oss << "Zenoh config file does not exist at: " << zenohConfigPath;
+                    throw std::runtime_error(oss.str());
+                }
             } else if (arg == "--python-env" && i + 1 < argc) {
                 pythonEnvPath = argv[++i];
+                if (!std::filesystem::is_directory(pythonEnvPath)) {
+                    std::ostringstream oss;
+                    oss << "Python environment directory does not exist at: " << pythonEnvPath;
+                    throw std::runtime_error(oss.str());
+                }
             } else {
                 std::ostringstream oss;
                 oss << "Unknown argument: " << arg;
@@ -1171,19 +1218,15 @@ int main(int argc, char* argv[]) {
         // but only if it hasn't been already re-executed.
         if (getenv("LIAISON_RELAUNCHED") == nullptr && !pythonEnvPath.empty()) {
         
-            if (!pythonEnvPath.empty()) {
-
-                // Check if pyenv.cfg exists to determine if it's a venv
-                std::string cfgPath = pythonEnvPath + "/pyvenv.cfg";
-                if (std::filesystem::exists(cfgPath)) {
-                    // It's a venv environment
-                    loadPythonLibFromVenv(pythonEnvPath);
-                } else {
-                    spdlog::debug("Could not find a 'pyvenv.cfg', assuming Conda virtual environment.");
-                    // Assume it's a Conda environment
-                    loadPythonLibFromConda(pythonEnvPath);
-                }
-
+            // Check if pyenv.cfg exists to determine if it's a venv
+            std::string cfgPath = pythonEnvPath + "/pyvenv.cfg";
+            if (std::filesystem::exists(cfgPath)) {
+                // It's a venv environment
+                loadPythonLibFromVenv(pythonEnvPath);
+            } else {
+                spdlog::debug("Could not find a 'pyvenv.cfg', assuming Conda virtual environment.");
+                // Assume it's a Conda environment
+                loadPythonLibFromConda(pythonEnvPath);
             }
 
             // Set a marker to prevent reexecution.
@@ -1225,17 +1268,13 @@ int main(int argc, char* argv[]) {
             oss << "Unknown argument:: " << option;
             throw std::invalid_argument(oss.str());
         }
-    } catch (const std::runtime_error& e) {
-        spdlog::error(e.what());
-        return 1;
     } catch (const std::invalid_argument& e) {
         spdlog::error(e.what());
         printUsage();
         return 1;
-    } catch (...) {
-        spdlog::error("An unknown error occurred.");
+    } catch (const std::exception& e) {
+        spdlog::error(e.what());
         return 1;
     }
-
     return 0;
 }
