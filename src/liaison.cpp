@@ -14,7 +14,6 @@
 #include <zip.h>
 #include <iostream>
 #include <memory>
-#include <Python.h>
 
 #include "zenoh.hxx"
 #include "fmi3.pb.h"
@@ -1030,38 +1029,109 @@ void printUsage() {
     std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --pyhton-lib <Path to Python library>\n";
 }
 
+void loadPythonLibFromVenv(const std::string& venvPath) {
+    // Open pyvenv.cfg
+    std::string cfgPath = venvPath + "/pyvenv.cfg";
+    FILE* cfgFile = fopen(cfgPath.c_str(), "r");
+  
+
+    // Extract home path and version
+    char line[1024];
+    std::string homePath;
+    std::string version;
+    while (fgets(line, sizeof(line), cfgFile)) {
+        std::string lineStr(line);
+        if (lineStr.find("home = ") != std::string::npos) {
+            homePath = lineStr.substr(lineStr.find("home = ") + 7);
+            if (!homePath.empty() && homePath.back() == '\n') {
+                homePath.pop_back();
+            }
+        } else if (lineStr.find("version = ") != std::string::npos) {
+            version = lineStr.substr(lineStr.find("version = ") + 10);
+            if (!version.empty() && version.back() == '\n') {
+                version.pop_back();
+            }
+        }
+    }
+    fclose(cfgFile);
+
+    if (homePath.empty() || version.empty()) {
+        throw std::runtime_error("Could not retrieve values for 'home' or 'version' from 'pyvenv.cfg'");
+        return;
+    }
+
+    // Remove 'bin' from the end of the homePath if present
+    if (homePath.length() >= 4 && homePath.substr(homePath.length() - 4) == "/bin") {
+        homePath = homePath.substr(0, homePath.length() - 4);
+    }
+
+    // Limit the version to major.minor
+    size_t dotPos = version.find('.');
+    if (dotPos != std::string::npos) {
+        size_t nextDotPos = version.find('.', dotPos + 1);
+        if (nextDotPos != std::string::npos) {
+            version = version.substr(0, nextDotPos);
+        }
+    }
+
+    // If windows, remove the dot between major and minor
 #ifdef _WIN32
-#include <filesystem>
-std::string findPythonLib(const std::string& libDir) {
-    for (const auto& entry : std::filesystem::directory_iterator(libDir)) {
-        std::string filename = entry.path().filename().string();
-        if (filename.find("python3") != std::string::npos &&
-            filename.find(".dll") != std::string::npos) {
-            return entry.path().string();
-        }
-    }
-    return "";
-}
-#else
-std::string findPythonLib(const std::string& libDir) {
-    DIR* dir = opendir(libDir.c_str());
-    if (!dir) {
-        return "";
-    }
-    std::string foundLib;
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        std::string filename(entry->d_name);
-        if (filename.find("libpython3") != std::string::npos &&
-            filename.find(".so") != std::string::npos) {
-            foundLib = libDir + "/" + filename;
-            break;
-        }
-    }
-    closedir(dir);
-    return foundLib;
-}
+    version.erase(std::remove(version.begin(), version.end(), '.'), version.end());
 #endif
+    spdlog::debug("Using Python home: {}", homePath);
+    spdlog::debug("Using Python version: {}", version);
+   
+
+    // Set PYTHONHOME to venvPath
+#ifdef _WIN32
+    _putenv_s("PYTHONHOME", venvPath.c_str());
+#else
+    setenv("PYTHONHOME", venvPath.c_str(), 1);
+#endif
+
+    // Set PYTHONPATH to site-packages within venvPath
+#ifdef _WIN32
+    std::string pythonPath = venvPath + "\\Lib\\site-packages";
+    if (!std::filesystem::exists(pythonPath)) {
+        throw std::runtime_error("Could not find site-packages directory at the expected location: " + pythonPath);
+    }
+    _putenv_s("PYTHONPATH", pythonPath.c_str());
+#else
+    std::string pythonPath = venvPath + "/lib/python" + version + "/site-packages";
+    if (!std::filesystem::exists(pythonPath)) {
+        throw std::runtime_error("Could not find site-packages directory at the expeced location: " + pythonPath);
+    }
+    setenv("PYTHONPATH", pythonPath.c_str(), 1);
+#endif
+
+    // Set LD_PRELOAD to home
+#ifdef _WIN32
+    std::string pythonLibPath = homePath + "\\python" + version + ".dll";
+    _putenv_s("LD_PRELOAD", pythonLibPath.c_str());
+#else
+    std::string pythonLibPath = homePath + "/lib/libpython" + version + ".so";
+    setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
+#endif
+
+}
+
+void loadPythonLibFromConda(const std::string& venvPath) {
+
+#ifdef _WIN32
+    std::string pythonLibPath = venvPath + "\\Python3.dll";
+    if (!std::filesystem::exists(pythonLibPath)) {
+        throw std::runtime_error("Could not find Python library at the expected location: " + pythonLibPath);
+    }
+    _putenv_s("LD_PRELOAD", pythonLibPath.c_str());
+#else
+    std::string pythonLibPath = venvPath + "/lib/libpython3.so";
+    if (!std::filesystem::exists(pythonLibPath)) {
+        throw std::runtime_error("Could not find Python library at the expected location: " + pythonLibPath);
+    }
+    setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
+#endif
+
+}
 
 
 
@@ -1090,8 +1160,6 @@ int main(int argc, char* argv[]) {
                 zenohConfigPath = argv[++i];
             } else if (arg == "--python-env" && i + 1 < argc) {
                 pythonEnvPath = argv[++i];
-            } else if (arg == "--python-lib" && i + 1 < argc) {
-                pythonLibPath = argv[++i];
             } else {
                 std::ostringstream oss;
                 oss << "Unknown argument: " << arg;
@@ -1099,30 +1167,32 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (!pythonEnvPath.empty() && !pythonLibPath.empty()) {
-            spdlog::warn("The arguments '--python-env' and '--python-lib' cannot be used together. Ignoring '--python-lib'");
-        }
-
         // Re-execute the process if either python-env or python-lib flag is provided,
         // but only if it hasn't been already re-executed.
-        if (getenv("LIAISON_RELAUNCHED") == nullptr && (!pythonEnvPath.empty() || !pythonLibPath.empty())) {
+        if (getenv("LIAISON_RELAUNCHED") == nullptr && !pythonEnvPath.empty()) {
         
             if (!pythonEnvPath.empty()) {
-                pythonLibPath = findPythonLib(pythonEnvPath + "/lib");
+
+                // Check if pyenv.cfg exists to determine if it's a venv
+                std::string cfgPath = pythonEnvPath + "/pyvenv.cfg";
+                if (std::filesystem::exists(cfgPath)) {
+                    // It's a venv environment
+                    loadPythonLibFromVenv(pythonEnvPath);
+                } else {
+                    spdlog::debug("Could not find a 'pyvenv.cfg', assuming Conda virtual environment.");
+                    // Assume it's a Conda environment
+                    loadPythonLibFromConda(pythonEnvPath);
+                }
+
             }
-            if (!pythonLibPath.empty()) {
-                #ifdef _WIN32
-                _putenv_s("LD_PRELOAD", pythonLibPath.c_str());
-                #else
-                setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
-                #endif
-            }
+
             // Set a marker to prevent reexecution.
             #ifdef _WIN32
             _putenv_s("LIAISON_RELAUNCHED", "1");
             #else
             setenv("LIAISON_RELAUNCHED", "1", 1);
             #endif
+
             // Rebuild the argument list and pass all original arguments to the new process.
             #ifdef _WIN32
             STARTUPINFO si = {sizeof(STARTUPINFO)};
