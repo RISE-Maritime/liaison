@@ -17,6 +17,10 @@
 #include "fmi3.pb.h"
 #include "fmi3Functions.h"
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
+
 // MACROS
 
 #define MAX_TRIES 3
@@ -225,54 +229,49 @@ void printDirectoryContents(const std::string& directoryPath) {
 
 void readConfigFile() {
     
-    std::string baseDirectory = getBaseDirectory();
-    std::string configFilePath = baseDirectory + "/config";
-    std::ifstream file(configFilePath);
-    if (!file.is_open()) {
-       printDirectoryContents(baseDirectory);
-       throw std::runtime_error("Failed to open config file at: " + configFilePath);
-    }
+    
 
-    // Read responderId from the file
-    std::string line;
-    std::regex regexPattern(R"(responderId='([^']+)')");
-    std::smatch match;
-    while (std::getline(file, line)) {
-        if (std::regex_search(line, match, regexPattern) && match.size() > 1) {
-            responderId = match.str(1);
-            break;
-        }
-    }
-    if (responderId.empty()) {
-        throw std::runtime_error("responderId not found in file: " + configFilePath);
-    }
 
-    // Read debug flag from the file
-    std::regex debugPattern(R"(debug=(true|false))");
-    while (std::getline(file, line)) {
-        if (std::regex_search(line, match, debugPattern) && match.size() > 1) {
-            debug = match.str(1) == "true";
-            break;
-        }
-    }
 
     return;
     
 }
 
 void StartZenohSession() {
-    // Read the responder id
+ 
     try {
-        readConfigFile();
-    } catch (const std::runtime_error& e) {
-        throw std::runtime_error(std::string("Could not read configuration file - ") + e.what());
-    }
-    // Start Zenoh Session
-    try {
+
         std::string baseDirectory = getBaseDirectory();
-        std::string zenohConfigPath = baseDirectory + "/zenoh_config.json";
-        bool zenohConfigExists = std::filesystem::exists(zenohConfigPath);
-        zenoh::Config zenohConfig = zenohConfigExists ? zenoh::Config::from_file(zenohConfigPath) : zenoh::Config::create_default();
+        std::string configFilePath = baseDirectory + "/config.json";
+        if (!std::filesystem::exists(configFilePath)) {
+            printDirectoryContents(baseDirectory);
+        throw std::runtime_error("Failed to open config file at: " + configFilePath);
+        }
+
+        json config;
+        config = json::parse(std::ifstream(configFilePath));
+        responderId = config["responderId"];
+        std::string zenohConfigString;
+        if (config.contains("zenohConfig")) {
+            json& zenohConfig = config["zenohConfig"];
+            if (zenohConfig.contains("transport") && 
+            zenohConfig["transport"].contains("link") && 
+            zenohConfig["transport"]["link"].contains("tls")) {
+                json& tls = zenohConfig["transport"]["link"]["tls"];
+                if (tls.contains("connect_certificate")) {
+                    tls["connect_certificate"] = baseDirectory + "/" + tls["connect_certificate"].get<std::string>();
+                }
+                if (tls.contains("connect_private_key")) {
+                    tls["connect_private_key"] = baseDirectory + "/" + tls["connect_private_key"].get<std::string>();
+                }
+                if (tls.contains("root_ca_certificate")) {
+                    tls["root_ca_certificate"] = baseDirectory + "/" + tls["root_ca_certificate"].get<std::string>();
+                }
+            } 
+            zenohConfigString = zenohConfig.dump();
+            
+        }
+        zenoh::Config zenohConfig = !zenohConfigString.empty() ? zenoh::Config::from_str(zenohConfigString) : zenoh::Config::create_default();
         session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(zenohConfig)));
     } catch (const zenoh::ZException& e) {
         throw std::runtime_error(e.what());
