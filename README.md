@@ -21,23 +21,24 @@ Liaison is inspired on [FMU-proxy](https://github.com/NTNU-IHB/FMU-proxy). The m
 
 To get started with Liaison, follow these steps:
 
-1. **Download and Install**
+**Prerequesites**
 
-   - Download the latest [release](https://github.com/RISE-Maritime/liaison/releases).
-   - Install [FMPy](https://fmpy.readthedocs.io/en/latest/install/) in your Python environment.  
-     _Note: FMPy is not a required dependency for Liaison; it is only used for testing._
+- Download the latest [release](https://github.com/RISE-Maritime/liaison/releases).
+- Install [FMPy](https://fmpy.readthedocs.io/en/latest/install/) in your Python environment.  
+  _Note: FMPy is not a required dependency for Liaison; it is only used for testing._
+- Get an FMU according to FMI 3.0. You can use one of the reference FMUs [provided by Modelica](https://github.com/modelica/Reference-FMUs). We recommend `BouncingBall`.
 
-2. **Create a "Liaison FMU"**
+**Step 1: Create a "Liaison FMU"**
 
 Use the following command to create a Liaison FMU.
 
 ```bash
-./liaison --make-fmu ../tests/BouncingBall.fmu fmus/bouncingball
+./liaison --make-fmu ./BouncingBall.fmu fmus/bouncingball
 ```
 
-The result will be an FMU named `BouncingBallLiaison.fmu`. Unlike the original FMU, this Liaison FMU does not include the original logic but retains the model description. It acts as a client, making all FMI function calls to the FMU being served at fmus/bouncingball.
+The result will be an FMU named `BouncingBallLiaison.fmu`. Unlike the original FMU, this Liaison FMU does not include the original logic but retains the model description. It acts as a client, making all FMI function calls to the FMU being served at `fmus/bouncingball`.
 
-3. **Step 2: Serve the original FMU**
+**Step 2: Serve the original FMU**
 
 Start serving the original FMU at `fmus/bouncingball` with the command:
 
@@ -45,9 +46,9 @@ Start serving the original FMU at `fmus/bouncingball` with the command:
 ./liaison --serve ../tests/BouncingBall.fmu fmus/bouncingball
 ```
 
-4. **Simulate the "Liaison FMU"**
+**Step 3: Use the "Liaison FMU" in a simulation**
 
-Simulate the Liaison FMU using FMPy and display the results:
+Use the Liaison FMU in a simulation with FMPy:
 
 ```bash
 fmpy simulate BouncingBallLiaison.fmu --show-plot
@@ -59,17 +60,17 @@ With this setup, FMPy will simulate the FMU as if it were the original, but the 
 
 ### Zenoh configuration
 
-The flag `--zenoh-config` can be used to provide a [Zenoh configuration JSON file](https://zenoh.io/docs/manual/configuration/#configuration-files) so that the Liasion FMU and/or the Liasion server connects to a Zenoh router.
+The flag `--zenoh-config` can be used to provide a [Zenoh configuration JSON file](https://zenoh.io/docs/manual/configuration/#configuration-files) so that the Liasion FMU and the Liasion server connects to a Zenoh router.
 
 ```bash
-./liaison --make-fmu ../tests/BouncingBall.fmu fmus/bouncingball --zenoh-config ../config.json
+./liaison --make-fmu ../BouncingBall.fmu fmus/bouncingball --zenoh-config ../config.json
 ```
 
 ```bash
-./liaison --serve ../tests/BouncingBall.fmu fmus/bouncingball --zenoh-config ../tests/config.json
+./liaison --serve ../BouncingBall.fmu fmus/bouncingball --zenoh-config ../config.json
 ```
 
-The following is an example of Zenoh configuration JSON file using TLS. The `*.pem` must be in the same directory as the JSON configuration file.
+The following is an example of Zenoh configuration JSON file using TLS. Liaison will look for the certificates (i.e `*.pem` files) in the locations specified in the configuration file.
 
 ```json
 {
@@ -80,16 +81,13 @@ The following is an example of Zenoh configuration JSON file using TLS. The `*.p
   "listen": {
     "endpoints": ["tls/[::]:7447"]
   },
-  "metadata": {
-    "name": "BouncingBallLiaison.fmu"
-  },
   "transport": {
     "link": {
       "tls": {
-        "root_ca_certificate": "minica.pem",
+        "root_ca_certificate": "./minica.pem",
         "enable_mtls": true,
-        "connect_private_key": "key.pem",
-        "connect_certificate": "cert.pem"
+        "connect_private_key": "./key.pem",
+        "connect_certificate": "./cert.pem"
       }
     }
   }
@@ -106,26 +104,22 @@ The flag `--debug` can be used so that the output is extra verbose to facilitate
 
 ### Python FMUs
 
-If the FMU depends on a Python environment, the Python environment (e.g. Conda or virtualenv) or Python library can be declared by using either the `--python-env` or `--python-lib` flags.
+If the FMU requires a Python environment, the Python environment (e.g. Conda or venv) needs to be declared by using the flag `--python-env`. This is the case for FMUs built with [PythonFMU3](https://github.com/StephenSmith25/PythonFMU3).
 
-**Python environment**
+**Examples**
 
 Conda
 
 ```bash
-./liaison --serve ./BouncingBall.fmu fmus/bouncingball --python-env /home/user/miniconda3/envs/bouncingball
+conda create -n bb
+./liaison --serve <Python-based FMU> <responderId> --python-env /home/user/miniconda3/envs/bb
 ```
 
-Virtualenv
+venv
 
 ```bash
-./liaison --serve ./BouncingBall.fmu fmus/bouncingball --python-env /home/user/.virualenvs/bouncingball
-```
-
-**Python library**
-
-```bash
-./liaison --serve ./BouncingBall.fmu fmus/bouncingball --python-lib /usr/lib/x86_64-linux-gnu/libpython3.8.so
+python -m venv bb
+./liaison --serve <Python-based FMU> <responderId> --python-env ./bb
 ```
 
 ## Development
