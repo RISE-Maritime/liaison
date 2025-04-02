@@ -1169,19 +1169,30 @@ void loadPythonLibFromVenv(const std::string& venvPath) {
 #endif
     spdlog::debug("Using Python home: {}", homePath);
     spdlog::debug("Using Python version: {}", version);
-   
+
+    // Set PYTHONHOME to homePath
+#ifdef _WIN32
+    spdlog::debug("Setting PYTHONHOME to: {}", homePath);
+    _putenv_s("PYTHONHOME", homePath.c_str());
+#else
+    spdlog::debug("Setting PYTHONHOME to: {}", homePath);
+    setenv("PYTHONHOME", homePath.c_str(), 1);
+#endif
+
     // Set PYTHONPATH to site-packages within venvPath
 #ifdef _WIN32
     std::string pythonPath = venvPath + "\\Lib\\site-packages";
     if (!std::filesystem::exists(pythonPath)) {
         throw std::runtime_error("Could not find site-packages directory at the expected location: " + pythonPath);
     }
+    spdlog::debug("Setting PYTHONPATH to: {}", pythonPath);
     _putenv_s("PYTHONPATH", pythonPath.c_str());
 #else
     std::string pythonPath = venvPath + "/lib/python" + version + "/site-packages";
     if (!std::filesystem::exists(pythonPath)) {
         throw std::runtime_error("Could not find site-packages directory at the expeced location: " + pythonPath);
     }
+    spdlog::debug("Setting PYTHONPATH to: {}", pythonPath);
     setenv("PYTHONPATH", pythonPath.c_str(), 1);
 #endif
 
@@ -1200,16 +1211,18 @@ void loadPythonLibFromVenv(const std::string& venvPath) {
 void loadPythonLibFromConda(const std::string& venvPath) {
 
 #ifdef _WIN32
-    std::string pythonLibPath = venvPath + "\\Python3.dll";
+    std::string pythonLibPath = findPythonLib(venvPath);
     if (!std::filesystem::exists(pythonLibPath)) {
         throw std::runtime_error("Could not find Python library at the expected location: " + pythonLibPath);
     }
+    spdlog::debug("Setting LD_PRELOAD to: {}", pythonLibPath);
     _putenv_s("LD_PRELOAD", pythonLibPath.c_str());
 #else
-    std::string pythonLibPath = venvPath + "/lib/libpython3.so";
+    std::string pythonLibPath = findPythonLib(venvPath);
     if (!std::filesystem::exists(pythonLibPath)) {
         throw std::runtime_error("Could not find Python library at the expected location: " + pythonLibPath);
     }
+    spdlog::debug("Setting LD_PRELOAD to: {}", pythonLibPath);
     setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
 #endif
 
