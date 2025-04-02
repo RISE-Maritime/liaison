@@ -1074,6 +1074,50 @@ void printUsage() {
     std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --python-env <Path to Python environment>\n";
 }
 
+std::string findPythonLib(const std::string& dirPath) {
+#ifdef _WIN32
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(dirPath)) {
+        std::string filename = entry.path().filename().string();
+        if (filename.find("python3") != std::string::npos &&
+            filename.find(".dll") != std::string::npos) {
+            return entry.path().string();
+        }
+    }
+    throw std::runtime_error("Could not find Python library at the expected location: " + dirPath);
+#else
+    std::string foundLib;
+    std::function<void(const std::string&)> searchDir = [&](const std::string& path) {
+        DIR* dir = opendir(path.c_str());
+        if (!dir) {
+            return;
+        }
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string name = entry->d_name;
+            if (name == "." || name == "..") {
+                continue;
+            }
+            std::string fullPath = path + "/" + name;
+            if (entry->d_type == DT_DIR) {
+                searchDir(fullPath);
+            } else if (name.find("libpython3") != std::string::npos &&
+                      name.find(".so") != std::string::npos) {
+                foundLib = fullPath;
+                closedir(dir);
+                return;
+            }
+        }
+        closedir(dir);
+    };
+    
+    searchDir(dirPath);
+    if (foundLib.empty()) {
+        throw std::runtime_error("Could not find Python library at the expected location: " + dirPath);
+    }
+    return foundLib;
+#endif
+}
+
 void loadPythonLibFromVenv(const std::string& venvPath) {
     // Open pyvenv.cfg
     std::string cfgPath = venvPath + "/pyvenv.cfg";
@@ -1142,11 +1186,12 @@ void loadPythonLibFromVenv(const std::string& venvPath) {
 #endif
 
     // Set LD_PRELOAD to home
+    std::string pythonLibPath = findPythonLib(homePath);
 #ifdef _WIN32
-    std::string pythonLibPath = homePath + "\\python" + version + ".dll";
+    spdlog::debug("Setting LD_PRELOAD to: {}", pythonLibPath);
     _putenv_s("LD_PRELOAD", pythonLibPath.c_str());
 #else
-    std::string pythonLibPath = homePath + "/lib/libpython" + version + ".so";
+    spdlog::debug("Setting LD_PRELOAD to: {}", pythonLibPath);
     setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
 #endif
 
@@ -1190,8 +1235,9 @@ int main(int argc, char* argv[]) {
             std::string arg = argv[i];
             if (arg == "--debug") {
                 debug = true;
-                zenoh::init_log_from_env_or("debug");
                 spdlog::set_level(spdlog::level::debug);
+            } else if (arg == "--debug-zenoh") {
+                zenoh::init_log_from_env_or("debug");
             } else if (arg == "--zenoh-config" && i + 1 < argc) {
                 zenohConfigPath = argv[++i];
                 if (!std::filesystem::exists(zenohConfigPath)) {
