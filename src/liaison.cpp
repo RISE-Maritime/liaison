@@ -1069,23 +1069,60 @@ void printUsage() {
     std::cout <<"  liaison --serve <Path to FMU> <Responder Id>\n";
     std::cout <<"  liaison --make-fmu <Path to FMU> <Responder Id>\n";
     std::cout <<"  liaison --make-fmu <Path to FMU> <Responder Id> --debug\n";
+    std::cout <<"  liaison --make-fmu <Path to FMU> <Responder Id> --debug-zenoh\n";
     std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
     std::cout <<"  liaison --make-fmu <Path to FMU> <Responder Id> --zenoh-config <Path to Zenoh config file>\n";
     std::cout <<"  liaison --serve <Path to FMU> <Responder Id> --python-env <Path to Python environment>\n";
 }
-
-std::string findPythonLib(const std::string& dirPath) {
+std::string findPythonLib(const std::string& dirPath, const std::string& version) {
 #ifdef _WIN32
+    // First search in the current directory
+    for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
+            if (filename.find("python" + version) != std::string::npos &&
+                filename.find(".dll") != std::string::npos) {
+                return entry.path().string();
+            }
+        }
+    }
+
+    // Then search in subdirectories
     for (const auto& entry : std::filesystem::recursive_directory_iterator(dirPath)) {
-        std::string filename = entry.path().filename().string();
-        if (filename.find("python3") != std::string::npos &&
-            filename.find(".dll") != std::string::npos) {
-            return entry.path().string();
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
+            if (filename.find("python" + version) != std::string::npos &&
+                filename.find(".dll") != std::string::npos) {
+                return entry.path().string();
+            }
         }
     }
     throw std::runtime_error("Could not find Python library at the expected location: " + dirPath);
 #else
     std::string foundLib;
+    
+    // First search in the current directory
+    DIR* dir = opendir(dirPath.c_str());
+    if (dir) {
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string name = entry->d_name;
+            if (name == "." || name == "..") {
+                continue;
+            }
+            if (entry->d_type != DT_DIR) {
+                if (name.find("libpython" + version) != std::string::npos &&
+                    name.find(".so") != std::string::npos) {
+                    foundLib = dirPath + "/" + name;
+                    closedir(dir);
+                    return foundLib;
+                }
+            }
+        }
+        closedir(dir);
+    }
+
+    // Then search in subdirectories
     std::function<void(const std::string&)> searchDir = [&](const std::string& path) {
         DIR* dir = opendir(path.c_str());
         if (!dir) {
@@ -1100,7 +1137,7 @@ std::string findPythonLib(const std::string& dirPath) {
             std::string fullPath = path + "/" + name;
             if (entry->d_type == DT_DIR) {
                 searchDir(fullPath);
-            } else if (name.find("libpython3") != std::string::npos &&
+            } else if (name.find("libpython" + version) != std::string::npos &&
                       name.find(".so") != std::string::npos) {
                 foundLib = fullPath;
                 closedir(dir);
@@ -1167,8 +1204,8 @@ void loadPythonLibFromVenv(const std::string& venvPath) {
 #ifdef _WIN32
     version.erase(std::remove(version.begin(), version.end(), '.'), version.end());
 #endif
-    spdlog::debug("Using Python home: {}", homePath);
-    spdlog::debug("Using Python version: {}", version);
+    spdlog::debug("Extracted Python home path form pyvenv.cfg: {}", homePath);
+    spdlog::debug("Extracted Python version form pyvenv.cfg: {}", version);
 
     // Set PYTHONHOME to homePath
 #ifdef _WIN32
@@ -1181,23 +1218,49 @@ void loadPythonLibFromVenv(const std::string& venvPath) {
 
     // Set PYTHONPATH to site-packages within venvPath
 #ifdef _WIN32
-    std::string pythonPath = venvPath + "\\Lib\\site-packages";
-    if (!std::filesystem::exists(pythonPath)) {
-        throw std::runtime_error("Could not find site-packages directory at the expected location: " + pythonPath);
+    // Try common Windows locations
+    std::vector<std::string> possiblePaths = {
+        venvPath + "\\Lib\\site-packages",
+        venvPath + "\\Lib\\python" + version + "\\site-packages",
+    };
+    std::string pythonPath;
+    bool found = false;
+    for (const auto& path : possiblePaths) {
+        if (std::filesystem::exists(path)) {
+            pythonPath = path;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        throw std::runtime_error("Could not find Python site-packages directory in any expected location");
     }
     spdlog::debug("Setting PYTHONPATH to: {}", pythonPath);
     _putenv_s("PYTHONPATH", pythonPath.c_str());
 #else
-    std::string pythonPath = venvPath + "/lib/python" + version + "/site-packages";
-    if (!std::filesystem::exists(pythonPath)) {
-        throw std::runtime_error("Could not find site-packages directory at the expeced location: " + pythonPath);
+    // Try common Unix locations
+    std::vector<std::string> possiblePaths = {
+        venvPath + "/lib/python" + version + "/site-packages",
+        venvPath + "/lib/site-packages",
+    };
+    std::string pythonPath;
+    bool found = false;
+    for (const auto& path : possiblePaths) {
+        if (std::filesystem::exists(path)) {
+            pythonPath = path;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        throw std::runtime_error("Could not find Python site-packages directory in any expected location");
     }
     spdlog::debug("Setting PYTHONPATH to: {}", pythonPath);
     setenv("PYTHONPATH", pythonPath.c_str(), 1);
 #endif
 
     // Set LD_PRELOAD to home
-    std::string pythonLibPath = findPythonLib(homePath);
+    std::string pythonLibPath = findPythonLib(homePath, version);
 #ifdef _WIN32
     spdlog::debug("Setting LD_PRELOAD to: {}", pythonLibPath);
     _putenv_s("LD_PRELOAD", pythonLibPath.c_str());
@@ -1209,19 +1272,11 @@ void loadPythonLibFromVenv(const std::string& venvPath) {
 }
 
 void loadPythonLibFromConda(const std::string& venvPath) {
-
+    std::string pythonLibPath = findPythonLib(venvPath, "3");
 #ifdef _WIN32
-    std::string pythonLibPath = findPythonLib(venvPath);
-    if (!std::filesystem::exists(pythonLibPath)) {
-        throw std::runtime_error("Could not find Python library at the expected location: " + pythonLibPath);
-    }
     spdlog::debug("Setting LD_PRELOAD to: {}", pythonLibPath);
     _putenv_s("LD_PRELOAD", pythonLibPath.c_str());
 #else
-    std::string pythonLibPath = findPythonLib(venvPath);
-    if (!std::filesystem::exists(pythonLibPath)) {
-        throw std::runtime_error("Could not find Python library at the expected location: " + pythonLibPath);
-    }
     spdlog::debug("Setting LD_PRELOAD to: {}", pythonLibPath);
     setenv("LD_PRELOAD", pythonLibPath.c_str(), 1);
 #endif
