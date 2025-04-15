@@ -70,18 +70,18 @@ void fmi3Get##TYPE(const zenoh::Query& query) { \
     proto::fmi3Get##TYPE##InputMessage input; \
     PARSE_QUERY(query, input) \
 \
-    fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()]; \
+    std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[input.n_value_references()]); \
     for (int i = 0; i < input.n_value_references(); i++) { \
         value_references[i] = input.value_references()[i]; \
     } \
-    fmi3##TYPE* values = new fmi3##TYPE[input.n_value_references()]; \
+    std::unique_ptr<fmi3##TYPE[]> values(new fmi3##TYPE[input.n_value_references()]); \
     size_t nValues = input.n_value_references(); \
 \
     fmi3Status status = fmu::fmi3Get##TYPE( \
         getInstance(input.instance_index()), \
-        value_references, \
+        value_references.get(), \
         input.n_value_references(), \
-        values, \
+        values.get(), \
         nValues \
     ); \
 \
@@ -102,20 +102,20 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
     proto::fmi3Set##TYPE##InputMessage input; \
     PARSE_QUERY(query, input); \
 \
-    fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()]; \
+    std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[input.n_value_references()]); \
     for (int i = 0; i < input.n_value_references(); i++) { \
         value_references[i] = input.value_references()[i]; \
     } \
-    fmi3##TYPE* values = new fmi3##TYPE[input.n_value_references()]; \
+    std::unique_ptr<fmi3##TYPE[]> values(new fmi3##TYPE[input.n_value_references()]); \
     for (int i = 0; i < input.n_value_references(); i++) { \
         values[i] = input.values()[i]; \
     } \
 \
     fmi3Status status = fmu::fmi3Set##TYPE( \
         getInstance(input.instance_index()), \
-        value_references, \
+        value_references.get(), \
         input.n_value_references(), \
-        values, \
+        values.get(), \
         input.n_values() \
     ); \
 \
@@ -132,7 +132,7 @@ std::shared_ptr<zenoh::Publisher> fmi3LogMessagePublisher;
 // Function to load and unload FMU library (platform-specific)
 #ifdef _WIN32
 HMODULE loadFmuLibrary(const std::string& libPath) {
-    HMODULE handle = LoadLibrary(libPath.c_str());
+    HMODULE handle = LoadLibraryA(libPath.c_str());
     if (!handle) {
         DWORD errorCode = GetLastError();
         LPVOID errorMsg;
@@ -141,14 +141,13 @@ HMODULE loadFmuLibrary(const std::string& libPath) {
             NULL,
             errorCode,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            (LPSTR)&errorMsg,
+            (LPTSTR)&errorMsg,
             0,
             NULL
         );
-        std::ostringstream oss;
-        oss << "Failed to load FMU library '" << libPath << "': " << (LPSTR)errorMsg;
+        std::string errorMessage = "Failed to load library: " + std::string((char*)errorMsg);
         LocalFree(errorMsg);
-        throw std::runtime_error(oss.str());
+        throw std::runtime_error(errorMessage);
     }
     return handle;
 }
@@ -198,6 +197,18 @@ const char** convertRepeatedFieldToCArray(const google::protobuf::RepeatedPtrFie
     return const_cast<const char**>(cArray);
 }
 
+void freeCArray(const char** cArray, size_t size) {
+    if (!cArray) return;
+    for (size_t i = 0; i < size; ++i) {
+        delete[] cArray[i];
+    }
+    delete[] cArray;
+}
+
+void freeCArray(const fmi3ValueReference* cArray, size_t size) {
+    if (!cArray) return;
+    delete[] cArray;
+}
 
 void printQuery(const zenoh::Query& query) {
     spdlog::debug("Query: {}", query.get_keyexpr().as_string_view());
@@ -322,13 +333,16 @@ namespace callbacks {
         proto::fmi3SetDebugLoggingMessage input;
         PARSE_QUERY(query, input)
 
+        const char** categories = convertRepeatedFieldToCArray(input.categories());
+
         fmi3Status status = fmu::fmi3SetDebugLogging(
             getInstance(input.instance_index()),
             input.logging_on(),
             input.n_categories(),
-            convertRepeatedFieldToCArray(input.categories())
+            categories
         );
 
+        freeCArray(categories, input.n_categories());
         proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
         SERIALIZE_REPLY(query, output)
     }
@@ -339,6 +353,8 @@ namespace callbacks {
         proto::fmi3InstantiateCoSimulationMessage input;
         PARSE_QUERY(query, input)
 
+        const fmi3ValueReference* required_intermediate_variables = convertRepeatedFieldToCArray(input.required_intermediate_variables());
+
         fmi3Instance instance = fmu::fmi3InstantiateCoSimulation(
             input.instance_name().c_str(),
             input.instantiation_token().c_str(),
@@ -347,12 +363,14 @@ namespace callbacks {
             input.logging_on(),
             input.event_mode_used(),
             input.early_return_allowed(),
-            convertRepeatedFieldToCArray(input.required_intermediate_variables()),
+            required_intermediate_variables,
             input.n_required_intermediate_variables(),
             nullptr,
             fmi3LogMessage,
             nullptr
         );
+
+        freeCArray(required_intermediate_variables, input.n_required_intermediate_variables());
 
         proto::fmi3InstanceMessage output;
         instances[nextIndex] = instance;
@@ -542,20 +560,20 @@ namespace callbacks {
         
         PARSE_QUERY(query, input)
 
-        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];    
+        std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[input.n_value_references()]);    
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
         }
-        fmi3String* values = new fmi3String[input.n_value_references()];
+        std::unique_ptr<fmi3String[]> values(new fmi3String[input.n_value_references()]);
         for (int i = 0; i < input.n_value_references(); i++) {
             values[i] = input.values()[i].c_str();
         }
 
         fmi3Status status = fmu::fmi3SetString(
             getInstance(input.instance_index()),
-            value_references,
+            value_references.get(),
             input.n_value_references(),
-            values,
+            values.get(),
             input.n_values()
         );
         
@@ -570,8 +588,8 @@ namespace callbacks {
         proto::fmi3SetClockInputMessage input;
         
         PARSE_QUERY(query, input)
-        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];    
-        fmi3Clock* values = new fmi3Clock[input.n_value_references()];
+        std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[input.n_value_references()]);    
+        std::unique_ptr<fmi3Clock[]> values(new fmi3Clock[input.n_value_references()]);
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
             values[i] = input.values()[i];
@@ -579,9 +597,9 @@ namespace callbacks {
         
         fmi3Status status = fmu::fmi3SetClock(
             getInstance(input.instance_index()),
-            value_references,
+            value_references.get(),
             input.n_value_references(),
-            values        
+            values.get()        
         );
         
         proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
@@ -594,18 +612,18 @@ namespace callbacks {
         proto::fmi3GetClockInputMessage input;
         PARSE_QUERY(query, input)
 
-        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];
+        std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[input.n_value_references()]);
         for (int i = 0; i < input.n_value_references(); i++) {
             value_references[i] = input.value_references()[i];
         }
-        fmi3Clock* values = new fmi3Clock[input.n_value_references()];
+        std::unique_ptr<fmi3Clock[]> values(new fmi3Clock[input.n_value_references()]);
         size_t nValues = input.n_value_references();
 
         fmi3Status status = fmu::fmi3GetClock(
             getInstance(input.instance_index()),
-            value_references,
+            value_references.get(),
             input.n_value_references(),
-            values
+            values.get()
         );
 
         proto::fmi3GetClockOutputMessage output;
@@ -615,6 +633,8 @@ namespace callbacks {
         output.set_status(transformToProtoStatus(status));
 
         SERIALIZE_REPLY(query, output)
+
+
     }
 
 
@@ -627,8 +647,8 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         size_t nValueReferences = input.n_value_references();
-        fmi3ValueReference* value_references = new fmi3ValueReference[nValueReferences];
-        size_t* value_sizes = new size_t[nValueReferences];
+        std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[nValueReferences]);
+        std::unique_ptr<size_t[]> value_sizes(new size_t[nValueReferences]);
         std::vector<uint8_t> values;
 
         size_t offset = 0;
@@ -641,15 +661,17 @@ namespace callbacks {
 
         fmi3Status status = fmu::fmi3SetBinary(
             getInstance(input.instance_index()),
-            value_references,
+            value_references.get(),
             input.n_value_references(),
-            value_sizes,
+            value_sizes.get(),
             reinterpret_cast<const fmi3Binary*>(values.data()),
             values.size()        
         );
         
         proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
         SERIALIZE_REPLY(query, output)
+
+     
     }
 
     void fmi3GetBinary(const zenoh::Query& query) {
@@ -659,9 +681,9 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         size_t nValueReferences = input.n_value_references();
-        fmi3ValueReference* value_references = new fmi3ValueReference[input.n_value_references()];
-        size_t* value_sizes = new size_t[nValueReferences];
-        fmi3Binary* values = new fmi3Binary[nValueReferences * MAX_BINARY_SIZE]; // Assuming MAX_BINARY_SIZE is defined
+        std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[input.n_value_references()]);
+        std::unique_ptr<size_t[]> value_sizes(new size_t[nValueReferences]);
+        std::unique_ptr<fmi3Binary[]> values(new fmi3Binary[nValueReferences * MAX_BINARY_SIZE]); // Assuming MAX_BINARY_SIZE is defined
         size_t n_value = 0;
 
         for (size_t i = 0; i < nValueReferences; ++i) {
@@ -670,23 +692,24 @@ namespace callbacks {
 
         fmi3Status status = fmu::fmi3GetBinary(
             getInstance(input.instance_index()),
-            value_references,
+            value_references.get(),
             nValueReferences,
-            value_sizes,
-            values,
+            value_sizes.get(),
+            values.get(),
             n_value
         );
 
         proto::fmi3GetBinaryOutputMessage output;
         size_t offset = 0;
         for (size_t i = 0; i < nValueReferences; ++i) {
-            std::string binaryValue(reinterpret_cast<const char*>(values + offset), value_sizes[i]);
+            std::string binaryValue(reinterpret_cast<const char*>(values.get() + offset), value_sizes[i]);
             output.add_values(binaryValue);
             offset += value_sizes[i];
         }
         output.set_status(transformToProtoStatus(status));
 
         SERIALIZE_REPLY(query, output)
+
     }
 
     
