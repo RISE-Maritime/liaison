@@ -23,18 +23,9 @@ using json = nlohmann::json;
 
 // MACROS
 
-#define MAX_TRIES 3
 
-#define TRY_CODE(FUNCTION_CALL, ERROR_MSG, ERROR_RETURN) \
-    try {                                                        \
-        FUNCTION_CALL                                             \
-    } catch (const std::exception &e) {                            \
-        std::cerr << ERROR_MSG << e.what() << std::endl;           \
-        return ERROR_RETURN;                                       \
-    } \
-
-#define SET_INSTANCE(INPUT, INSTANCE) \
-    Placeholder* placeholder = reinterpret_cast<Placeholder*>(INSTANCE); \
+#define SET_INSTANCE_REFERENCE(INPUT, INSTANCE) \
+    Placeholder* const placeholder = reinterpret_cast<Placeholder*>(INSTANCE); \
     INPUT.set_instance_index(placeholder->instance_index);  \
 
 #define NOT_IMPLEMENTED \
@@ -49,7 +40,7 @@ fmi3Status fmi3Set##TYPE( \
     size_t nValues) { \
     proto::fmi3Set##TYPE##InputMessage input; \
     proto::fmi3StatusMessage output; \
-    SET_INSTANCE(input, instance); \
+    SET_INSTANCE_REFERENCE(input, instance); \
     for (size_t i = 0; i < nValueReferences; ++i) { \
         input.add_value_references(valueReferences[i]); \
     } \
@@ -71,7 +62,7 @@ fmi3Status fmi3Get##TYPE( \
     size_t nValues) { \
     proto::fmi3Get##TYPE##InputMessage input; \
     proto::fmi3Get##TYPE##OutputMessage output; \
-    SET_INSTANCE(input, instance); \
+    SET_INSTANCE_REFERENCE(input, instance); \
     for (size_t i = 0; i < nValueReferences; ++i) { \
         input.add_value_references(valueReferences[i]); \
     } \
@@ -85,9 +76,6 @@ fmi3Status fmi3Get##TYPE( \
 }
 
 #define BASE_QUERY(fmi3Function, input, output, responderId, errorReturnValue) \
-    if (debug) { \
-        std::cout << "Querying " << fmi3Function << std::endl; \
-    } \
     std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
     input.SerializeToArray(input_wire.data(), input_wire.size()); \
     std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
@@ -98,11 +86,12 @@ fmi3Status fmi3Get##TYPE( \
     auto res = replies.recv(); \
     if (std::holds_alternative<zenoh::channels::RecvError>(res)) { \
         if (std::get<zenoh::channels::RecvError>(res) == zenoh::channels::RecvError::Z_DISCONNECTED) { \
-            std::cerr << "Exception in " << fmi3Function << ": '" << expr << "' is disconnected." << std::endl; \
+            std::string error_msg = "Exception in " + std::string(fmi3Function) + ": '" + expr + "' is disconnected."; \
+            placeholder->logMessage(placeholder->instanceEnvironment, fmi3Error, "Zenoh", error_msg.c_str()); \
         } else if (std::get<zenoh::channels::RecvError>(res) == zenoh::channels::RecvError::Z_NODATA) { \
-            std::cerr << "Exception in " << fmi3Function << ": No data received from '" << expr << "'." << std::endl; \
+            std::string error_msg = "Exception in " + std::string(fmi3Function) + ": No data received from '" + expr + "'."; \
+            placeholder->logMessage(placeholder->instanceEnvironment, fmi3Error, "Zenoh", error_msg.c_str()); \
         } \
-        session.reset(); \
         return errorReturnValue; \
     } \
     const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
@@ -112,15 +101,41 @@ fmi3Status fmi3Get##TYPE( \
 
 
 #define QUERY(fmi3Function, input, output, responderId) \
-    BASE_QUERY(fmi3Function, input, output, responderId, fmi3Error) \
-    
+    BASE_QUERY(fmi3Function, input, output, responderId, fmi3Fatal) \
+
 
 #define QUERY_INSTANCE(fmi3Function, input, output, responderId) \
-    BASE_QUERY(fmi3Function, input, output, responderId, nullptr) \
+    std::vector<uint8_t> input_wire(input.ByteSizeLong()); \
+    input.SerializeToArray(input_wire.data(), input_wire.size()); \
+    std::string expr = "rpc/" + responderId + "/" + fmi3Function; \
+    zenoh::Session::GetOptions options; \
+    options.target = zenoh::QueryTarget::Z_QUERY_TARGET_ALL; \
+    options.payload = zenoh::Bytes(std::move(input_wire)); \
+    auto replies = session->get(expr,"", zenoh::channels::FifoChannel(1), std::move(options)); \
+    auto res = replies.recv(); \
+    if (std::holds_alternative<zenoh::channels::RecvError>(res)) { \
+        if (std::get<zenoh::channels::RecvError>(res) == zenoh::channels::RecvError::Z_DISCONNECTED) { \
+            std::string error_msg = "Exception in " + std::string(fmi3Function) + ": '" + expr + "' is disconnected."; \
+            logMessage(instanceEnvironment, fmi3Error, "Zenoh", error_msg.c_str()); \
+        } else if (std::get<zenoh::channels::RecvError>(res) == zenoh::channels::RecvError::Z_NODATA) { \
+            std::string error_msg = "Exception in " + std::string(fmi3Function) + ": No data received from '" + expr + "'."; \
+            logMessage(instanceEnvironment, fmi3Error, "Zenoh", error_msg.c_str()); \
+        } \
+        session->close(); \
+        fmi3LogMessageSubscriber.reset(); \
+        session.reset(); \
+        responderId.clear(); \
+        return nullptr; \
+    } \
+    const auto &sample = std::get<zenoh::Reply>(res).get_ok(); \
+    const auto& output_payload = sample.get_payload(); \
+    std::vector<uint8_t> output_wire = output_payload.as_vector(); \
+    output.ParseFromArray(output_wire.data(), output_wire.size()); \
    
 
 #define QUERY_VOID(fmi3Function, input, output, responderId) \
     BASE_QUERY(fmi3Function, input, output, responderId, ) \
+
 
 #define LOG_MESSAGE_HANDLING(logMessage, instanceEnvironment, responderId) \
     auto logMessageCallback = [logMessage, instanceEnvironment](const zenoh::Sample& sample) { \
@@ -144,19 +159,23 @@ fmi3Status fmi3Get##TYPE( \
 
 // end of MACROS
 
-bool debug=false;
 std::unique_ptr<zenoh::Session> session;
 std::shared_ptr<zenoh::Subscriber<void>> fmi3LogMessageSubscriber;
+std::string responderId;
+
 
 class Placeholder {
 public:
-    Placeholder(int index) {
-        instance_index = index;
-    }
+    Placeholder(int index, fmi3InstanceEnvironment env, fmi3LogMessageCallback logCb) 
+        : instance_index(index)
+        , instanceEnvironment(env)
+        , logMessage(logCb) {}
+    
     int instance_index;
+    fmi3InstanceEnvironment instanceEnvironment;
+    fmi3LogMessageCallback logMessage;
 };
 
-std::string responderId;
 
 fmi3Status transformToFmi3Status(proto::Status status) {
     switch (status) {
@@ -227,15 +246,6 @@ void printDirectoryContents(const std::string& directoryPath) {
     }
 }
 
-void readConfigFile() {
-    
-    
-
-
-
-    return;
-    
-}
 
 void StartZenohSession() {
  
@@ -306,7 +316,7 @@ fmi3Status fmi3SetDebugLogging(
     proto::fmi3SetDebugLoggingMessage input;
     proto::fmi3StatusMessage output;
 
-    SET_INSTANCE(input, instance)
+    SET_INSTANCE_REFERENCE(input, instance)
     input.set_logging_on(loggingOn);
     input.set_n_categories(nCategories);
     for (int i = 0; i < nCategories; ++i) {
@@ -348,9 +358,11 @@ fmi3Instance fmi3InstantiateModelExchange(
     input.set_visible(visible);
     input.set_logging_on(loggingOn);
 
+    
     QUERY_INSTANCE("fmi3InstantiateModelExchange", input, output, responderId)
+   
 
-    Placeholder* placeholder = new Placeholder(output.instance_index());
+    Placeholder* placeholder = new Placeholder(output.instance_index(), instanceEnvironment, logMessage);
     return reinterpret_cast<fmi3Instance>(placeholder);
 }
 
@@ -395,9 +407,11 @@ fmi3Instance fmi3InstantiateCoSimulation(
     }
     input.set_n_required_intermediate_variables(nRequiredIntermediateVariables);
     
+  
     QUERY_INSTANCE("fmi3InstantiateCoSimulation", input, output, responderId)
+   
 
-    Placeholder* placeholder = new Placeholder(output.instance_index());
+    Placeholder* placeholder = new Placeholder(output.instance_index(), instanceEnvironment, logMessage);
     return reinterpret_cast<fmi3Instance>(placeholder);
 }
 
@@ -416,7 +430,7 @@ fmi3Instance fmi3InstantiateScheduledExecution(
 
     try {
         StartZenohSession();
-    } catch (const std::exception& e) {
+    } catch (const std::runtime_error& e) {
         logMessage(instanceEnvironment, fmi3Error, "Zenoh", e.what());
         return nullptr;
     }
@@ -433,24 +447,40 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     input.set_logging_on(loggingOn);
     // TODO: implement functionality for instanceEnvironment, clockUpdate, lockPeemption, and unlockPreemption
 
+       
     QUERY_INSTANCE("fmi3InstantiateScheduledExecution", input, output, responderId)
+ 
 
-    Placeholder* placeholder = new Placeholder(output.instance_index());
+    Placeholder* placeholder = new Placeholder(output.instance_index(), instanceEnvironment, logMessage);
     return reinterpret_cast<fmi3Instance>(placeholder);
 }
 
 void fmi3FreeInstance(fmi3Instance instance) {
+    if (!instance) {
+        return;
+    }
 
+    // Free the instance
     proto::fmi3InstanceMessage input;
-    proto::voidMessage output;
-
-    SET_INSTANCE(input, instance)
-
+    proto::fmi3StatusMessage output;
+    SET_INSTANCE_REFERENCE(input, instance)
     QUERY_VOID("fmi3FreeInstance", input, output, responderId)
 
-    delete placeholder;
+    try {
+        // Close the session (all communication is done)
+        session->close();
+    } catch (const std::exception& e) {
+        placeholder->logMessage(placeholder->instanceEnvironment, fmi3Error, "Zenoh", e.what());
+    }
 
+    // Reset all global state
+    fmi3LogMessageSubscriber.reset();
     session.reset();
+    responderId.clear();
+
+    // Clean up the placeholder (created by SET_INSTANCE_REFERENCE)
+    delete placeholder;
+    
 }
 
 fmi3Status fmi3EnterInitializationMode(
@@ -464,7 +494,7 @@ fmi3Status fmi3EnterInitializationMode(
     proto::fmi3EnterInitializationModeMessage input;
     proto::fmi3StatusMessage output;
 
-    SET_INSTANCE(input, instance)
+    SET_INSTANCE_REFERENCE(input, instance)
     input.set_tolerance_defined(toleranceDefined);
     input.set_tolerance(tolerance);
     input.set_start_time(startTime);
@@ -481,7 +511,7 @@ fmi3Status fmi3ExitInitializationMode(fmi3Instance instance) {
     proto::fmi3InstanceMessage input;
     proto::fmi3StatusMessage output;
     
-    SET_INSTANCE(input, instance)
+    SET_INSTANCE_REFERENCE(input, instance)
 
     QUERY("fmi3ExitInitializationMode", input, output, responderId)
 
@@ -493,7 +523,7 @@ fmi3Status fmi3EnterEventMode(fmi3Instance instance) {
     proto::fmi3InstanceMessage input;
     proto::fmi3StatusMessage output;
 
-    SET_INSTANCE(input, instance)
+    SET_INSTANCE_REFERENCE(input, instance)
 
     QUERY("fmi3EnterEventMode", input, output, responderId)
 
@@ -504,7 +534,7 @@ fmi3Status fmi3Terminate(fmi3Instance instance) {
     proto::fmi3InstanceMessage input;
     proto::fmi3StatusMessage output;
 
-    SET_INSTANCE(input, instance)
+    SET_INSTANCE_REFERENCE(input, instance)
     
     QUERY("fmi3Terminate", input, output, responderId)
 
@@ -515,7 +545,7 @@ fmi3Status fmi3Reset(fmi3Instance instance) {
     proto::fmi3InstanceMessage input;
     proto::fmi3StatusMessage output;
 
-    SET_INSTANCE(input, instance)
+    SET_INSTANCE_REFERENCE(input, instance)
     
     QUERY("fmi3Reset", input, output, responderId)
 
@@ -569,8 +599,8 @@ fmi3Status fmi3GetString(
     proto::fmi3GetStringInputMessage input;
     proto::fmi3GetStringOutputMessage output;
 
-    SET_INSTANCE(input, instance) 
-    for (int i = 0; i < nValueReferences; ++i) {
+    SET_INSTANCE_REFERENCE(input, instance) 
+    for (size_t i = 0; i < nValueReferences; ++i) {
         input.add_value_references(valueReferences[i]); 
     }
     input.set_n_value_references(nValueReferences);
@@ -596,9 +626,9 @@ fmi3Status fmi3SetBinary(
     proto::fmi3SetBinaryInputMessage input;
     proto::fmi3StatusMessage output;
 
-    SET_INSTANCE(input, instance) 
+    SET_INSTANCE_REFERENCE(input, instance) 
     
-    for (int i = 0; i < nValueReferences; ++i) {
+    for (size_t i = 0; i < nValueReferences; ++i) {
         input.add_value_references(valueReferences[i]);
     }
     input.set_n_value_references(nValueReferences);
@@ -627,9 +657,9 @@ fmi3Status fmi3GetBinary(
     proto::fmi3GetBinaryInputMessage input;
     proto::fmi3GetBinaryOutputMessage output;
 
-    SET_INSTANCE(input, instance) 
+    SET_INSTANCE_REFERENCE(input, instance) 
     
-    for (int i = 0; i < nValueReferences; ++i) {
+    for (size_t i = 0; i < nValueReferences; ++i) {
         input.add_value_references(valueReferences[i]); 
     }
     input.set_n_value_references(nValueReferences);
@@ -657,9 +687,9 @@ fmi3Status fmi3SetClock(
     proto::fmi3SetClockInputMessage input;
     proto::fmi3StatusMessage output;
 
-    SET_INSTANCE(input, instance) 
+    SET_INSTANCE_REFERENCE(input, instance) 
     
-    for (int i = 0; i < nValueReferences; ++i) {
+    for (size_t i = 0; i < nValueReferences; ++i) {
         input.add_value_references(valueReferences[i]);
         input.add_values(values[i]); 
     }
@@ -679,9 +709,9 @@ fmi3Status fmi3GetClock(
     proto::fmi3GetClockInputMessage input;
     proto::fmi3GetClockOutputMessage output;
 
-    SET_INSTANCE(input, instance) 
+    SET_INSTANCE_REFERENCE(input, instance) 
     
-    for (int i = 0; i < nValueReferences; ++i) {
+    for (size_t i = 0; i < nValueReferences; ++i) {
         input.add_value_references(valueReferences[i]); 
     }
     input.set_n_value_references(nValueReferences);
@@ -924,7 +954,7 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     proto::fmi3DoStepMessage input;
     proto::fmi3StatusMessage output;
     
-    SET_INSTANCE(input, instance) 
+    SET_INSTANCE_REFERENCE(input, instance) 
     input.set_current_communication_point(currentCommunicationPoint);
     input.set_communication_step_size(communicationStepSize);
     input.set_no_set_fmu_state_prior_to_current_point(noSetFMUStatePriorToCurrentPoint);
