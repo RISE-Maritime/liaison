@@ -7,6 +7,20 @@ endif()
 
 project(Liaison LANGUAGES C CXX)
 
+option(ENABLE_SANITIZERS "Enable sanitizers in debug builds" OFF)
+
+if(ENABLE_SANITIZERS)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        # Add sanitizer flags for gcc/clang
+        set(SANITIZER_FLAGS "-fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${SANITIZER_FLAGS}")
+        set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} ${SANITIZER_FLAGS}")
+        message(STATUS "Sanitizers enabled in debug build")
+    else()
+        message(WARNING "Sanitizers requested but not supported with current compiler")
+    endif()
+endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "")
     set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -118,3 +132,19 @@ target_link_libraries(liaisonfmu PRIVATE
     protobuf::libprotobuf
     nlohmann_json::nlohmann_json
 )
+
+add_executable(simple_fmu_runner src/simple_fmu_runner.cpp src/utils.cpp)
+
+if (WIN32)
+    target_link_libraries(simple_fmu_runner PRIVATE
+        libzip::zip
+        ZLIB::ZLIB
+    )
+else()
+    target_link_libraries(simple_fmu_runner PRIVATE
+        ${libzip_LIBRARIES}
+        ${zlib_LIBRARIES}
+        -static-libgcc
+        -static-libstdc++
+    )
+endif()
