@@ -125,9 +125,9 @@ void fmi3Set##TYPE(const zenoh::Query& query) { \
 
 // end of MACROS
 
-std::shared_ptr<fmi3String> resourcePath;
-std::shared_ptr<zenoh::Session> session;
-std::shared_ptr<zenoh::Publisher> fmi3LogMessagePublisher;
+std::unique_ptr<fmi3String> resourcePath;
+std::unique_ptr<zenoh::Session> session;
+std::unique_ptr<zenoh::Publisher> fmi3LogMessagePublisher;
 
 // Function to load and unload FMU library (platform-specific)
 #ifdef _WIN32
@@ -775,7 +775,7 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
 
     // Set the resource path
     std::string resourcePathStr = tempPath + "/resources";
-    resourcePath = std::make_shared<fmi3String>(resourcePathStr.c_str());
+    resourcePath = std::make_unique<fmi3String>(resourcePathStr.c_str());
     
     // Load the FMU library dynamically
     auto fmuLibrary = loadFmuLibrary(libPath);
@@ -821,12 +821,12 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
 
     // Start Zenoh Session
     zenoh::Config zconfig = zenohConfigPath.empty() ? zenoh::Config::create_default() : zenoh::Config::from_file(zenohConfigPath);
-    session = std::make_shared<zenoh::Session>(zenoh::Session::open(std::move(zconfig)));
+    session = std::make_unique<zenoh::Session>(zenoh::Session::open(std::move(zconfig)));
 
     // LogMessage publisher declaration
     std::string expr_fmi3LogMessage = "rpc/" + responderId + "/fmi3LogMessage";
     zenoh::KeyExpr keyexpr_fmi3LogMessage(expr_fmi3LogMessage);
-    fmi3LogMessagePublisher = std::make_shared<zenoh::Publisher>(session->declare_publisher(keyexpr_fmi3LogMessage));
+    fmi3LogMessagePublisher = std::make_unique<zenoh::Publisher>(session->declare_publisher(keyexpr_fmi3LogMessage));
 
     // Queryable declarations
     DECLARE_QUERYABLE(fmi3SetDebugLogging, responderId) 
@@ -883,18 +883,36 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
         }
     }
 
-    // Reset shared pointers
+    // Reset shared pointer
+    spdlog::debug("Cleaning up publishers ...");
+    if (fmi3LogMessagePublisher) {
+        try {
+            std::move(*fmi3LogMessagePublisher).undeclare();
+        } catch (const std::exception& e) {
+            spdlog::error("Error undeclaring fmi3LogMessage publisher: {}", e.what());
+        }
+    }
+
+    spdlog::debug("Closing Zenoh session ...");
+    if (session) {
+        try {
+            session->close();
+        } catch (const std::exception& e) {
+            spdlog::error("Error closing Zenoh session: {}", e.what());
+        }
+    }
+
+    spdlog::debug("Cleaning up resources ...");
     resourcePath.reset();
     session.reset();
     fmi3LogMessagePublisher.reset();
 
     // Unload the FMU library before exiting
+    spdlog::debug("Unloading FMU library ...");
     if (fmuLibrary) {
         unloadFmuLibrary(fmuLibrary);
         fmuLibrary = nullptr;
     }
-
-
 
     return 0;
 }
