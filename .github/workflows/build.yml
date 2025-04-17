@@ -47,6 +47,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
 
+      - name: Install MinGW
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+          version: 8.1.0
+
       - name: Cache vcpkg
         uses: actions/cache@v3
         with:
@@ -62,10 +68,10 @@ jobs:
       - name: Install protobuf, zlib and libzip
         run: |
           Get-Command vcpkg
-          vcpkg install protobuf:x64-windows-static 
-          vcpkg install zlib:x64-windows-static
-          vcpkg install libzip:x64-windows-static
-          vcpkg install spdlog:x64-windows-static
+          vcpkg install protobuf:x64-windows-static-md 
+          vcpkg install zlib:x64-windows-static-md
+          vcpkg install libzip:x64-windows-static-md
+          vcpkg install spdlog:x64-windows-static-md
 
       - name: Build and install Zenoh-c
         run: |
@@ -86,7 +92,7 @@ jobs:
       - name: Build Liaison
         run: |
           mkdir -p build && cd build
-          cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+          cmake .. -G "MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
 
       - name: Debug Build Output
