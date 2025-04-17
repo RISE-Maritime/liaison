@@ -18,9 +18,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Ensure static libraries are used
 set(BUILD_SHARED_LIBS OFF)
 
-# Set static runtime library for MSVC
-if (MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# Set static runtime library for MINGW
+if(MINGW)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
 endif()
 
 # Include Zenoh-c and Zenoh-cpp (find static libraries)
