@@ -7,6 +7,7 @@ endif()
 
 project(Liaison LANGUAGES C CXX)
 
+
 if(CMAKE_BUILD_TYPE STREQUAL "")
     set(CMAKE_BUILD_TYPE Release)
 endif()
