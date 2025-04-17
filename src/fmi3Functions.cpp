@@ -196,6 +196,7 @@ public:
     fmi3InstanceEnvironment instanceEnvironment;
     fmi3LogMessageCallback logMessage;
     std::unique_ptr<zenoh::Session> session;
+    std::unique_ptr<zenoh::Subscriber<void>> fmi3LogMessageSubscriber;
     std::string responderId;
 
 
@@ -257,7 +258,9 @@ public:
         };
         std::string expr_fmi3LogMessage = "rpc/" + responderId + "/fmi3LogMessage"; 
         zenoh::KeyExpr keyexpr_fmi3LogMessage(expr_fmi3LogMessage); 
-        auto subscriber = session->declare_subscriber(keyexpr_fmi3LogMessage, logMessageCallback, dropCallback); 
+        fmi3LogMessageSubscriber = std::make_unique<zenoh::Subscriber<void>>(
+            session->declare_subscriber(keyexpr_fmi3LogMessage, logMessageCallback, dropCallback)
+        ); 
     }
 
     void SetInstanceIndex(int index) {
@@ -265,6 +268,10 @@ public:
     }
 
     ~Placeholder() {
+        if (fmi3LogMessageSubscriber) {
+            std::move(*fmi3LogMessageSubscriber).undeclare();
+            fmi3LogMessageSubscriber.reset();
+        }
         if (session) {
             session->close();
         }
