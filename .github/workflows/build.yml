@@ -68,10 +68,10 @@ jobs:
       - name: Install protobuf, zlib and libzip
         run: |
           Get-Command vcpkg
-          vcpkg install protobuf:x64-windows-static-md 
-          vcpkg install zlib:x64-windows-static-md
-          vcpkg install libzip:x64-windows-static-md
-          vcpkg install spdlog:x64-windows-static-md
+          vcpkg install protobuf:x64-mingw-static 
+          vcpkg install zlib:x64-mingw-static
+          vcpkg install libzip:x64-mingw-static
+          vcpkg install spdlog:x64-mingw-static
 
       - name: Build and install Zenoh-c
         run: |
