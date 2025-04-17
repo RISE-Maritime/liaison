@@ -78,6 +78,12 @@ jobs:
           dir C:\vcpkg\installed\x64-mingw-static
           dir C:\vcpkg\installed\x64-mingw-static\include
           dir C:\vcpkg\installed\x64-mingw-static\lib   
+      
+      - name: Debug protoc
+        run: |
+          dir C:\vcpkg\installed\x64-mingw-static\tools\protobuf
+          Get-Command protoc.exe
+          protoc --version
 
       - name: Build and install Zenoh-c
         run: |
