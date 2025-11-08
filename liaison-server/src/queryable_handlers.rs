@@ -44,7 +44,7 @@ use crate::instance_manager::InstanceManager;
 use crate::proto;
 use anyhow::{Context, Result};
 use prost::Message;
-use std::ffi::{CString, c_void};
+use std::ffi::CString;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 use zenoh::query::Query;

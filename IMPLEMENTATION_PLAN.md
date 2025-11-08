@@ -54,7 +54,7 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - [x] 5.2 Port server callback functions - COMPLETED
 - [x] 5.3 Port queryable declarations and handlers - COMPLETED
 - [x] 5.4 Port FMU serving functionality - COMPLETED
-- [ ] 5.5 Port FMU creation (--make-fmu) functionality - STUB ONLY
+- [x] 5.5 Port FMU creation (--make-fmu) functionality - COMPLETED
 - [x] 5.6 Port Python environment handling - COMPLETED (parameter accepted, deferred implementation)
 - [x] 5.7 Port command-line argument parsing - COMPLETED
 - [x] 5.8 Port main function and error handling - COMPLETED
@@ -71,9 +71,9 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - [ ] 7.3 Create migration guide
 
 ## Current Status
-**Phase:** 5 - Server Application (MOSTLY COMPLETED)
+**Phase:** 5 - Server Application (COMPLETED)
 **Last Updated:** 2025-11-08
-**Next Step:** Phase 5.5 - Complete FMU Creator, then Phase 6 - Testing & Validation
+**Next Step:** Phase 6 - Testing & Validation
 
 ## Completed Work
 
@@ -222,6 +222,23 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
   - Resolved borrow checker issues in FMU loader
   - Fixed Zenoh Wait trait imports for zenoh 1.0 API
   - Fixed Display trait issues with byte strings
+- **FMU Creator** (`fmu_creator.rs`): Complete FMU creation functionality:
+  - `make_fmu()`: Main function for creating Liaison FMU wrappers
+  - Extracts source FMU to temporary directory
+  - Creates new ZIP archive named `{modelName}Liaison.fmu`
+  - Adds platform-specific binaries (Linux .so and Windows .dll)
+  - Copies modelDescription.xml from source FMU
+  - Processes Zenoh configuration with TLS certificate handling
+  - Creates and embeds config.json with responder ID and Zenoh config
+  - `process_tls_certificates()`: Helper for processing TLS certificates
+  - Validates certificate file existence
+  - Copies certificates to binaries/ directory in FMU
+  - Updates config paths to relative filenames
+  - Comprehensive error handling with anyhow::Context
+  - Full logging with tracing for all operations
+  - Unit tests for model name extraction and TLS certificate parsing
+- **Build Status**: All tests pass (29 total: 6 in liaison-fmi, 23 in liaison-server)
+- **Linting**: Warnings only for FMI naming conventions (intentional for C API compatibility)
 
 ## Notes
 - Maintain C ABI compatibility for the client library (cdylib)

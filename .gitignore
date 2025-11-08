@@ -3,3 +3,4 @@ build
 tests/config.json
 examples/target/
 Cargo.lock
+target/
