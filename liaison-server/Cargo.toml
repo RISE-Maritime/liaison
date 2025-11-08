@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[lib]
+name = "liaison_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "liaison"
 path = "src/main.rs"

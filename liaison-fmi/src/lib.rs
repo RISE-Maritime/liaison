@@ -7,9 +7,9 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 pub mod fmi3;
-mod proto;
+pub mod proto;
 mod placeholder;
-mod conversions;
+pub mod conversions;
 mod utils;
 
 // Re-export the FMI functions

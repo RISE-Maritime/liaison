@@ -32,6 +32,9 @@ thiserror = "1.0"
 zip = "2.1"
 tempfile = "3.10"
 
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
 # Platform-specific libraries (must be added to each crate individually)
 libloading = "0.8"
 

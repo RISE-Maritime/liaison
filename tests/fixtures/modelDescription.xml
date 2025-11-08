@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription
+    fmiVersion="3.0"
+    modelName="MockFMU"
+    instantiationToken="{12345678-1234-1234-1234-123456789012}"
+    description="A simple mock FMU for testing"
+    author="Liaison Test Framework"
+    version="1.0"
+    generationTool="Liaison Test Generator"
+    generationDateAndTime="2025-11-08T00:00:00Z"
+    variableNamingConvention="flat">
+
+    <CoSimulation
+        modelIdentifier="MockFMU"
+        needsExecutionTool="false"
+        canBeInstantiatedOnlyOncePerProcess="false"
+        canGetAndSetFMUState="false"
+        canSerializeFMUState="false"
+        providesDirectionalDerivatives="false"
+        providesAdjointDerivatives="false"
+        providesPerElementDependencies="false"/>
+
+    <LogCategories>
+        <Category name="logAll" description="All log messages"/>
+    </LogCategories>
+
+    <DefaultExperiment
+        startTime="0.0"
+        stopTime="10.0"
+        stepSize="0.1"/>
+
+    <ModelVariables>
+        <Float64 name="time"
+                 valueReference="0"
+                 causality="output"
+                 variability="continuous"
+                 initial="exact"
+                 description="Simulation time">
+            <Start value="0.0"/>
+        </Float64>
+
+        <Float64 name="counter"
+                 valueReference="1"
+                 causality="output"
+                 variability="discrete"
+                 initial="exact"
+                 description="Step counter">
+            <Start value="0.0"/>
+        </Float64>
+
+        <Float64 name="stepSize"
+                 valueReference="2"
+                 causality="parameter"
+                 variability="fixed"
+                 initial="exact"
+                 description="Simulation step size">
+            <Start value="0.1"/>
+        </Float64>
+    </ModelVariables>
+
+    <ModelStructure>
+        <Output valueReference="0"/>
+        <Output valueReference="1"/>
+    </ModelStructure>
+
+</fmiModelDescription>

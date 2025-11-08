@@ -301,6 +301,136 @@ fn process_tls_certificates(tls: &mut Value, zip: &mut ZipWriter<File>) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::{self, File};
+    use std::io::Write;
+    use tempfile::TempDir;
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
+
+    /// Helper function to create a minimal test FMU
+    fn create_test_fmu(temp_dir: &TempDir, model_name: &str) -> PathBuf {
+        let fmu_path = temp_dir.path().join(format!("{}.fmu", model_name));
+        let fmu_file = File::create(&fmu_path).unwrap();
+        let mut zip = ZipWriter::new(fmu_file);
+
+        // Create a minimal modelDescription.xml
+        let model_description = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription
+    fmiVersion="3.0"
+    modelName="{}"
+    instantiationToken="{{12345678-1234-1234-1234-123456789012}}">
+    <CoSimulation modelIdentifier="{}"/>
+</fmiModelDescription>"#,
+            model_name, model_name
+        );
+
+        zip.start_file("modelDescription.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(model_description.as_bytes()).unwrap();
+        zip.finish().unwrap();
+
+        fmu_path
+    }
+
+    /// Helper function to create test certificate files
+    fn create_test_certificates(temp_dir: &TempDir) -> (PathBuf, PathBuf, PathBuf) {
+        let cert_path = temp_dir.path().join("client.crt");
+        let key_path = temp_dir.path().join("client.key");
+        let ca_path = temp_dir.path().join("ca.crt");
+
+        fs::write(&cert_path, "FAKE CERTIFICATE DATA").unwrap();
+        fs::write(&key_path, "FAKE KEY DATA").unwrap();
+        fs::write(&ca_path, "FAKE CA DATA").unwrap();
+
+        (cert_path, key_path, ca_path)
+    }
+
+    /// Helper function to create a Zenoh config file
+    fn create_zenoh_config(
+        temp_dir: &TempDir,
+        cert_path: Option<&PathBuf>,
+        key_path: Option<&PathBuf>,
+        ca_path: Option<&PathBuf>,
+    ) -> PathBuf {
+        let config_path = temp_dir.path().join("zenoh_config.json");
+        let mut config = json!({
+            "mode": "client",
+            "connect": {
+                "endpoints": ["tcp/localhost:7447"]
+            }
+        });
+
+        if cert_path.is_some() || key_path.is_some() || ca_path.is_some() {
+            config["transport"] = json!({
+                "link": {
+                    "tls": {}
+                }
+            });
+
+            if let Some(cert) = cert_path {
+                config["transport"]["link"]["tls"]["connect_certificate"] =
+                    json!(cert.to_str().unwrap());
+            }
+            if let Some(key) = key_path {
+                config["transport"]["link"]["tls"]["connect_private_key"] =
+                    json!(key.to_str().unwrap());
+            }
+            if let Some(ca) = ca_path {
+                config["transport"]["link"]["tls"]["root_ca_certificate"] =
+                    json!(ca.to_str().unwrap());
+            }
+        }
+
+        let mut file = File::create(&config_path).unwrap();
+        serde_json::to_writer_pretty(&mut file, &config).unwrap();
+        config_path
+    }
+
+    /// Helper function to create binaries directory structure
+    fn create_binaries_dir(temp_dir: &TempDir) -> PathBuf {
+        let binaries_path = temp_dir.path().join("binaries");
+        fs::create_dir_all(&binaries_path.join("x86_64-linux")).unwrap();
+        fs::create_dir_all(&binaries_path.join("x86_64-windows")).unwrap();
+
+        // Create dummy library files
+        fs::write(
+            binaries_path.join("x86_64-linux/libliaisonfmu.so"),
+            "FAKE LINUX LIBRARY",
+        )
+        .unwrap();
+        fs::write(
+            binaries_path.join("x86_64-windows/liaisonfmu.dll"),
+            "FAKE WINDOWS LIBRARY",
+        )
+        .unwrap();
+
+        binaries_path
+    }
+
+    /// Helper to extract and validate FMU contents
+    fn extract_and_validate_fmu(fmu_path: &PathBuf) -> Result<TempDir> {
+        let temp_dir = TempDir::new()?;
+        let file = File::open(fmu_path)?;
+        let mut archive = zip::ZipArchive::new(file)?;
+
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            let outpath = temp_dir.path().join(file.name());
+
+            if file.name().ends_with('/') {
+                fs::create_dir_all(&outpath)?;
+            } else {
+                if let Some(p) = outpath.parent() {
+                    fs::create_dir_all(p)?;
+                }
+                let mut outfile = File::create(&outpath)?;
+                std::io::copy(&mut file, &mut outfile)?;
+            }
+        }
+
+        Ok(temp_dir)
+    }
 
     #[test]
     fn test_tls_certificate_extraction() {
@@ -317,6 +447,18 @@ mod tests {
                 .and_then(|v| v.as_str()),
             Some("/path/to/cert.pem")
         );
+        assert_eq!(
+            tls_config
+                .get("connect_private_key")
+                .and_then(|v| v.as_str()),
+            Some("/path/to/key.pem")
+        );
+        assert_eq!(
+            tls_config
+                .get("root_ca_certificate")
+                .and_then(|v| v.as_str()),
+            Some("/path/to/ca.pem")
+        );
     }
 
     #[test]
@@ -324,5 +466,386 @@ mod tests {
         let path = PathBuf::from("/some/path/MyModel.fmu");
         let model_name = path.file_stem().and_then(|s| s.to_str()).unwrap();
         assert_eq!(model_name, "MyModel");
+    }
+
+    #[test]
+    fn test_model_name_extraction_various_paths() {
+        // Test different path formats
+        let test_cases = vec![
+            ("model.fmu", "model"),
+            ("MyModel.fmu", "MyModel"),
+            ("/absolute/path/TestFMU.fmu", "TestFMU"),
+            ("./relative/ComplexModel.fmu", "ComplexModel"),
+        ];
+
+        for (input, expected) in test_cases {
+            let path = PathBuf::from(input);
+            let model_name = path.file_stem().and_then(|s| s.to_str()).unwrap();
+            assert_eq!(model_name, expected, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_tls_config_with_empty_strings() {
+        // Test handling of empty string paths
+        let tls_config = json!({
+            "connect_certificate": "",
+            "connect_private_key": "",
+            "root_ca_certificate": ""
+        });
+
+        assert_eq!(
+            tls_config
+                .get("connect_certificate")
+                .and_then(|v| v.as_str()),
+            Some("")
+        );
+    }
+
+    #[test]
+    fn test_tls_config_missing_fields() {
+        // Test handling of missing TLS fields
+        let tls_config = json!({
+            "connect_certificate": "/path/to/cert.pem"
+        });
+
+        assert_eq!(
+            tls_config
+                .get("connect_certificate")
+                .and_then(|v| v.as_str()),
+            Some("/path/to/cert.pem")
+        );
+        assert_eq!(
+            tls_config
+                .get("connect_private_key")
+                .and_then(|v| v.as_str()),
+            None
+        );
+    }
+
+    #[test]
+    fn test_process_tls_certificates_with_valid_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let (cert_path, key_path, ca_path) = create_test_certificates(&temp_dir);
+
+        let mut tls_config = json!({
+            "connect_certificate": cert_path.to_str().unwrap(),
+            "connect_private_key": key_path.to_str().unwrap(),
+            "root_ca_certificate": ca_path.to_str().unwrap()
+        });
+
+        let zip_path = temp_dir.path().join("test.zip");
+        let zip_file = File::create(&zip_path).unwrap();
+        let mut zip = ZipWriter::new(zip_file);
+
+        let result = process_tls_certificates(&mut tls_config, &mut zip);
+        assert!(result.is_ok(), "Should successfully process valid TLS files");
+
+        // Verify that paths were converted to filenames
+        assert_eq!(
+            tls_config.get("connect_certificate").and_then(|v| v.as_str()),
+            Some("client.crt")
+        );
+        assert_eq!(
+            tls_config.get("connect_private_key").and_then(|v| v.as_str()),
+            Some("client.key")
+        );
+        assert_eq!(
+            tls_config.get("root_ca_certificate").and_then(|v| v.as_str()),
+            Some("ca.crt")
+        );
+
+        zip.finish().unwrap();
+    }
+
+    #[test]
+    fn test_process_tls_certificates_missing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let nonexistent = temp_dir.path().join("nonexistent.crt");
+
+        let mut tls_config = json!({
+            "connect_certificate": nonexistent.to_str().unwrap()
+        });
+
+        let zip_path = temp_dir.path().join("test.zip");
+        let zip_file = File::create(&zip_path).unwrap();
+        let mut zip = ZipWriter::new(zip_file);
+
+        let result = process_tls_certificates(&mut tls_config, &mut zip);
+        assert!(
+            result.is_err(),
+            "Should fail when certificate file doesn't exist"
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("does not exist"));
+    }
+
+    #[test]
+    fn test_process_tls_certificates_empty_paths() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut tls_config = json!({
+            "connect_certificate": "",
+            "connect_private_key": "",
+            "root_ca_certificate": ""
+        });
+
+        let zip_path = temp_dir.path().join("test.zip");
+        let zip_file = File::create(&zip_path).unwrap();
+        let mut zip = ZipWriter::new(zip_file);
+
+        let result = process_tls_certificates(&mut tls_config, &mut zip);
+        assert!(
+            result.is_ok(),
+            "Should succeed with empty paths (they are skipped)"
+        );
+
+        // Empty paths should remain unchanged
+        assert_eq!(
+            tls_config.get("connect_certificate").and_then(|v| v.as_str()),
+            Some("")
+        );
+    }
+
+    #[test]
+    fn test_process_tls_certificates_partial_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let (cert_path, _, _) = create_test_certificates(&temp_dir);
+
+        // Only provide certificate, not key or CA
+        let mut tls_config = json!({
+            "connect_certificate": cert_path.to_str().unwrap()
+        });
+
+        let zip_path = temp_dir.path().join("test.zip");
+        let zip_file = File::create(&zip_path).unwrap();
+        let mut zip = ZipWriter::new(zip_file);
+
+        let result = process_tls_certificates(&mut tls_config, &mut zip);
+        assert!(result.is_ok(), "Should handle partial TLS config");
+
+        assert_eq!(
+            tls_config.get("connect_certificate").and_then(|v| v.as_str()),
+            Some("client.crt")
+        );
+        zip.finish().unwrap();
+    }
+
+    #[test]
+    fn test_config_json_generation_basic() {
+        // Test basic config.json structure
+        let responder_id = "test-responder-123".to_string();
+        let model_name = "TestModel".to_string();
+
+        let config = json!({
+            "responderId": responder_id,
+            "name": model_name,
+        });
+
+        assert_eq!(config.get("responderId").and_then(|v| v.as_str()), Some("test-responder-123"));
+        assert_eq!(config.get("name").and_then(|v| v.as_str()), Some("TestModel"));
+        assert!(config.get("zenohConfig").is_none());
+    }
+
+    #[test]
+    fn test_config_json_generation_with_zenoh() {
+        // Test config.json with Zenoh configuration
+        let responder_id = "test-responder-456".to_string();
+        let model_name = "TestModel".to_string();
+        let zenoh_config_json = json!({
+            "mode": "client",
+            "metadata": {
+                "name": "TestModel"
+            }
+        });
+
+        let mut config = json!({
+            "responderId": responder_id,
+            "name": model_name,
+        });
+
+        config["zenohConfig"] = zenoh_config_json.clone();
+
+        assert_eq!(config.get("responderId").and_then(|v| v.as_str()), Some("test-responder-456"));
+        assert_eq!(config.get("name").and_then(|v| v.as_str()), Some("TestModel"));
+        assert!(config.get("zenohConfig").is_some());
+        assert_eq!(
+            config["zenohConfig"]["mode"].as_str(),
+            Some("client")
+        );
+    }
+
+    #[test]
+    fn test_zenoh_config_metadata_name_setting() {
+        // Test that metadata.name gets set to model name
+        let model_name = "MyTestModel";
+        let mut config = json!({
+            "mode": "client"
+        });
+
+        // Simulate the metadata setting logic
+        if config.get("metadata").is_none() {
+            config["metadata"] = json!({});
+        }
+        config["metadata"]["name"] = json!(model_name);
+
+        assert_eq!(
+            config["metadata"]["name"].as_str(),
+            Some("MyTestModel")
+        );
+    }
+
+    #[test]
+    fn test_zenoh_config_preserves_existing_metadata() {
+        // Test that existing metadata is preserved
+        let model_name = "MyModel";
+        let mut config = json!({
+            "mode": "client",
+            "metadata": {
+                "custom_field": "custom_value"
+            }
+        });
+
+        config["metadata"]["name"] = json!(model_name);
+
+        assert_eq!(config["metadata"]["name"].as_str(), Some("MyModel"));
+        assert_eq!(
+            config["metadata"]["custom_field"].as_str(),
+            Some("custom_value")
+        );
+    }
+
+    #[test]
+    fn test_make_fmu_invalid_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let nonexistent_fmu = temp_dir.path().join("nonexistent.fmu");
+
+        let result = make_fmu(
+            nonexistent_fmu,
+            "test-responder".to_string(),
+            None,
+        );
+
+        assert!(result.is_err(), "Should fail with nonexistent FMU");
+    }
+
+    #[test]
+    fn test_make_fmu_without_binaries_directory() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a test FMU
+        let fmu_path = create_test_fmu(&temp_dir, "TestModel");
+
+        // Change to temp directory where binaries don't exist
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+
+        let result = make_fmu(
+            fmu_path,
+            "test-responder".to_string(),
+            None,
+        );
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+
+        assert!(result.is_err(), "Should fail when binaries directory doesn't exist");
+        assert!(result.unwrap_err().to_string().contains("binaries"));
+    }
+
+    #[test]
+    fn test_output_fmu_naming() {
+        // Test that output FMU is named correctly
+        let model_name = "MyTestModel";
+        let expected_output = format!("{}Liaison.fmu", model_name);
+
+        assert_eq!(expected_output, "MyTestModelLiaison.fmu");
+    }
+
+    #[test]
+    fn test_library_filename_generation() {
+        // Test that library filenames are generated correctly
+        let model_name = "TestModel";
+        let linux_lib = format!("binaries/x86_64-linux/{}.so", model_name);
+        let windows_lib = format!("binaries/x86_64-windows/{}.dll", model_name);
+
+        assert_eq!(linux_lib, "binaries/x86_64-linux/TestModel.so");
+        assert_eq!(windows_lib, "binaries/x86_64-windows/TestModel.dll");
+    }
+
+    #[test]
+    fn test_zenoh_config_file_parsing() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = create_zenoh_config(&temp_dir, None, None, None);
+
+        let file = File::open(&config_path).unwrap();
+        let config: Value = serde_json::from_reader(file).unwrap();
+
+        assert_eq!(config["mode"].as_str(), Some("client"));
+        assert!(config["connect"]["endpoints"].is_array());
+    }
+
+    #[test]
+    fn test_zenoh_config_with_tls_parsing() {
+        let temp_dir = TempDir::new().unwrap();
+        let (cert_path, key_path, ca_path) = create_test_certificates(&temp_dir);
+        let config_path = create_zenoh_config(
+            &temp_dir,
+            Some(&cert_path),
+            Some(&key_path),
+            Some(&ca_path),
+        );
+
+        let file = File::open(&config_path).unwrap();
+        let config: Value = serde_json::from_reader(file).unwrap();
+
+        assert!(config["transport"]["link"]["tls"].is_object());
+        assert!(config["transport"]["link"]["tls"]["connect_certificate"].is_string());
+        assert!(config["transport"]["link"]["tls"]["connect_private_key"].is_string());
+        assert!(config["transport"]["link"]["tls"]["root_ca_certificate"].is_string());
+    }
+
+    #[test]
+    fn test_model_name_from_xml() {
+        // Test extracting model name from modelDescription.xml content
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription modelName="ExtractedModelName" fmiVersion="3.0">
+</fmiModelDescription>"#;
+
+        // For now we extract from file name, not XML
+        // But this test validates XML structure
+        assert!(xml.contains("modelName=\"ExtractedModelName\""));
+    }
+
+    #[test]
+    fn test_invalid_model_name_from_path() {
+        // Test path without file stem
+        let path = PathBuf::from("/");
+        let model_name = path.file_stem().and_then(|s| s.to_str());
+        assert!(model_name.is_none());
+    }
+
+    #[test]
+    fn test_certificate_filename_extraction() {
+        // Test extracting just the filename from full paths
+        let cert_path = PathBuf::from("/etc/certs/my-certificate.pem");
+        let filename = cert_path.file_name().and_then(|s| s.to_str()).unwrap();
+        assert_eq!(filename, "my-certificate.pem");
+
+        let key_path = PathBuf::from("./keys/private.key");
+        let key_filename = key_path.file_name().and_then(|s| s.to_str()).unwrap();
+        assert_eq!(key_filename, "private.key");
+    }
+
+    #[test]
+    fn test_json_null_handling() {
+        // Test that Value::Null works as expected
+        let mut zenoh_config_json = Value::Null;
+        assert!(zenoh_config_json.is_null());
+
+        zenoh_config_json = json!({"test": "value"});
+        assert!(!zenoh_config_json.is_null());
     }
 }

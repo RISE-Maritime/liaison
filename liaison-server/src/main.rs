@@ -3,17 +3,9 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use liaison_server::{fmu_creator, server};
 use std::path::PathBuf;
 use tracing::info;
-
-mod proto;
-mod server;
-mod fmu_creator;
-mod utils;
-mod fmu_loader;
-mod instance_manager;
-mod callbacks;
-mod queryable_handlers;
 
 #[derive(Parser)]
 #[command(name = "liaison")]

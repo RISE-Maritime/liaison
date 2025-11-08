@@ -1,0 +1,9 @@
+# Test build artifacts
+fixtures/build/
+
+# Test output
+*.log
+
+# Temporary FMU files
+*.fmu
+!fixtures/build/MockFMU.fmu

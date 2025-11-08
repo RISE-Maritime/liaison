@@ -28,5 +28,8 @@ libc = "0.2"
 libloading = { workspace = true }
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_LibraryLoader", "Win32_System_Threading"] }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [build-dependencies]
 prost-build = "0.13"

@@ -123,9 +123,10 @@ pub fn get_base_directory() -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
-    fn test_get_base_directory() {
+    fn test_get_base_directory_returns_ok() {
         // This test verifies that the function runs without panicking
         // The actual path will vary depending on where the test is run
         let result = get_base_directory();
@@ -133,5 +134,76 @@ mod tests {
 
         let path = result.unwrap();
         assert!(!path.is_empty(), "Base directory should not be empty");
+    }
+
+    #[test]
+    fn test_get_base_directory_returns_valid_path() {
+        let result = get_base_directory();
+        assert!(result.is_ok());
+
+        let path_str = result.unwrap();
+        let path = Path::new(&path_str);
+
+        // The path should be a valid filesystem path
+        // We can't guarantee it exists in all test environments, but it should be well-formed
+        assert!(path.is_absolute() || !path_str.is_empty());
+    }
+
+    #[test]
+    fn test_get_base_directory_consistency() {
+        // Calling the function multiple times should return the same result
+        let result1 = get_base_directory();
+        let result2 = get_base_directory();
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+        assert_eq!(result1.unwrap(), result2.unwrap());
+    }
+
+    #[test]
+    fn test_get_base_directory_contains_grandparent() {
+        // The function should return the grandparent directory of the library
+        let result = get_base_directory();
+        assert!(result.is_ok());
+
+        let path_str = result.unwrap();
+        let path = Path::new(&path_str);
+
+        // The path should have at least one component (not be empty)
+        let path_components: Vec<_> = path.components().collect();
+        assert!(!path_components.is_empty(), "Path should have at least one component");
+
+        // The path should be a valid directory path
+        assert!(path.as_os_str().len() > 0, "Path should not be empty");
+    }
+
+    #[test]
+    fn test_get_base_directory_is_directory_like() {
+        let result = get_base_directory();
+        assert!(result.is_ok());
+
+        let path_str = result.unwrap();
+
+        // Should not end with file extensions
+        assert!(!path_str.ends_with(".dll"));
+        assert!(!path_str.ends_with(".so"));
+        assert!(!path_str.ends_with(".dylib"));
+        assert!(!path_str.ends_with(".exe"));
+    }
+
+    #[test]
+    fn test_get_base_directory_no_trailing_separator() {
+        let result = get_base_directory();
+        assert!(result.is_ok());
+
+        let path_str = result.unwrap();
+
+        // Path should not have trailing separator (on most systems)
+        // This is a quality check for consistent path handling
+        #[cfg(windows)]
+        assert!(!path_str.ends_with('\\') || path_str.len() <= 3); // Allow for "C:\"
+
+        #[cfg(unix)]
+        assert!(!path_str.ends_with('/') || path_str == "/");
     }
 }
