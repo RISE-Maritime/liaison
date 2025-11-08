@@ -1,0 +1,34 @@
+[package]
+name = "liaison-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "liaison"
+path = "src/main.rs"
+
+[dependencies]
+zenoh = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+zip = { workspace = true }
+tempfile = { workspace = true }
+clap = { version = "4.5", features = ["derive"] }
+
+[target.'cfg(unix)'.dependencies]
+libloading = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+libloading = { workspace = true }
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_LibraryLoader", "Win32_System_Threading"] }
+
+[build-dependencies]
+prost-build = "0.13"

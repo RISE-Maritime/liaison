@@ -1,0 +1,42 @@
+[workspace]
+members = ["liaison-server", "liaison-fmi"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["RISE Maritime"]
+license = "MIT"
+
+[workspace.dependencies]
+# Zenoh for communication
+zenoh = "1.0"
+
+# Protocol Buffers
+prost = "0.13"
+prost-types = "0.13"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# File system and archives
+zip = "2.1"
+tempfile = "3.10"
+
+# Platform-specific libraries (must be added to each crate individually)
+libloading = "0.8"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3

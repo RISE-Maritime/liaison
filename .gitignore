@@ -1,4 +1,5 @@
 build
 *.pem
 tests/config.json
-examples
+examples/target/
+Cargo.lock
