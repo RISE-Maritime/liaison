@@ -227,12 +227,14 @@ mod tests {
         let message = CString::new("test message").unwrap();
 
         // Call the callback with null context (safe for testing since we don't use it yet)
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
 
         // If we get here without crashing, the test passes
     }
@@ -242,12 +244,14 @@ mod tests {
         // Test handling of null category string
         let message = CString::new("test message").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            std::ptr::null(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                std::ptr::null(),
+                message.as_ptr(),
+            );
+        }
 
         // Should handle null category gracefully
     }
@@ -257,12 +261,14 @@ mod tests {
         // Test handling of null message string
         let category = CString::new("test_category").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            std::ptr::null(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                std::ptr::null(),
+            );
+        }
 
         // Should handle null message gracefully
     }
@@ -270,12 +276,14 @@ mod tests {
     #[test]
     fn test_fmi3_log_message_with_null_strings() {
         // Call with null strings - should handle gracefully
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Warning,
-            std::ptr::null(),
-            std::ptr::null(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Warning,
+                std::ptr::null(),
+                std::ptr::null(),
+            );
+        }
 
         // If we get here without crashing, the test passes
     }
@@ -285,12 +293,14 @@ mod tests {
         let category = CString::new("logAll").unwrap();
         let message = CString::new("FMU initialized successfully").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -298,12 +308,14 @@ mod tests {
         let category = CString::new("logWarning").unwrap();
         let message = CString::new("Parameter out of range, using default").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Warning,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Warning,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -311,12 +323,14 @@ mod tests {
         let category = CString::new("logDiscard").unwrap();
         let message = CString::new("Event discarded").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Discard,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Discard,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -324,12 +338,14 @@ mod tests {
         let category = CString::new("logError").unwrap();
         let message = CString::new("Invalid state transition").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Error,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Error,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -337,12 +353,14 @@ mod tests {
         let category = CString::new("logFatal").unwrap();
         let message = CString::new("Memory allocation failed").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Fatal,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Fatal,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -358,12 +376,14 @@ mod tests {
             fmi3Status::fmi3Error,
             fmi3Status::fmi3Fatal,
         ] {
-            fmi3_log_message(
-                std::ptr::null_mut(),
-                *status,
-                category.as_ptr(),
-                message.as_ptr(),
-            );
+            unsafe {
+                fmi3_log_message(
+                    std::ptr::null_mut(),
+                    *status,
+                    category.as_ptr(),
+                    message.as_ptr(),
+                );
+            }
         }
     }
 
@@ -375,12 +395,14 @@ mod tests {
         let category = CString::new("").unwrap();
         let message = CString::new("").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -389,12 +411,14 @@ mod tests {
         let category = CString::new("log@#$%").unwrap();
         let message = CString::new("Test with special: !@#$%^&*()").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -403,12 +427,14 @@ mod tests {
         let category = CString::new("logUnicode").unwrap();
         let message = CString::new("Test with unicode: αβγδ 你好").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -420,12 +446,14 @@ mod tests {
         let category = CString::new(long_category).unwrap();
         let message = CString::new(long_message).unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -434,12 +462,14 @@ mod tests {
         let category = CString::new("logMultiline").unwrap();
         let message = CString::new("Line 1\nLine 2\nLine 3").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Warning,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Warning,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -448,12 +478,14 @@ mod tests {
         let category = CString::new("logTabbed").unwrap();
         let message = CString::new("Col1\tCol2\tCol3").unwrap();
 
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     #[test]
@@ -465,12 +497,14 @@ mod tests {
         let category = CString::new("test_category").unwrap();
         let message = CString::new("test message").unwrap();
 
-        fmi3_log_message(
-            ctx_ptr,
-            fmi3Status::fmi3OK,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                ctx_ptr,
+                fmi3Status::fmi3OK,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
 
         // Currently the callback doesn't use the context, but this tests
         // that passing a valid pointer doesn't cause issues
@@ -491,12 +525,14 @@ mod tests {
             let category_c = CString::new(category).unwrap();
             let message_c = CString::new(msg).unwrap();
 
-            fmi3_log_message(
-                std::ptr::null_mut(),
-                fmi3Status::fmi3OK,
-                category_c.as_ptr(),
-                message_c.as_ptr(),
-            );
+            unsafe {
+                fmi3_log_message(
+                    std::ptr::null_mut(),
+                    fmi3Status::fmi3OK,
+                    category_c.as_ptr(),
+                    message_c.as_ptr(),
+                );
+            }
         }
     }
 
@@ -515,12 +551,14 @@ mod tests {
             let category = CString::new("logError").unwrap();
             let message = CString::new(msg).unwrap();
 
-            fmi3_log_message(
-                std::ptr::null_mut(),
-                fmi3Status::fmi3Error,
-                category.as_ptr(),
-                message.as_ptr(),
-            );
+            unsafe {
+                fmi3_log_message(
+                    std::ptr::null_mut(),
+                    fmi3Status::fmi3Error,
+                    category.as_ptr(),
+                    message.as_ptr(),
+                );
+            }
         }
     }
 
@@ -533,35 +571,43 @@ mod tests {
         let message = CString::new("test").unwrap();
 
         // Both null
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3OK,
-            std::ptr::null(),
-            std::ptr::null(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3OK,
+                std::ptr::null(),
+                std::ptr::null(),
+            );
+        }
 
         // Category null, message valid
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Warning,
-            std::ptr::null(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Warning,
+                std::ptr::null(),
+                message.as_ptr(),
+            );
+        }
 
         // Category valid, message null
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Error,
-            category.as_ptr(),
-            std::ptr::null(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Error,
+                category.as_ptr(),
+                std::ptr::null(),
+            );
+        }
 
         // Both valid
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            fmi3Status::fmi3Fatal,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                fmi3Status::fmi3Fatal,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 }

@@ -14,6 +14,7 @@
 //! ```no_run
 //! use liaison_server::fmu_loader::FmuLibrary;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let lib_path = "/path/to/fmu/binaries/x86_64-linux/MyModel.so";
 //! let fmu = FmuLibrary::new(lib_path)?;
 //!
@@ -23,6 +24,8 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 //! let version = (fmu.fmi3_get_version)();
+//! # Ok(())
+//! # }
 //! ```
 
 use anyhow::{Context, Result};
@@ -515,7 +518,10 @@ impl FmuLibrary {
     /// ```no_run
     /// use liaison_server::fmu_loader::FmuLibrary;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let fmu = FmuLibrary::new("/path/to/model.so")?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new<P: AsRef<Path>>(lib_path: P) -> Result<Self> {
         let lib_path = lib_path.as_ref();

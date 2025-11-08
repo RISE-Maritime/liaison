@@ -486,12 +486,14 @@ fn test_fmi3_log_message_callback_with_valid_strings() {
     let message = CString::new("This is a test message").unwrap();
 
     // Test with null context (safe since we don't use it yet)
-    fmi3_log_message(
-        std::ptr::null_mut(),
-        fmi3Status::fmi3OK,
-        category.as_ptr(),
-        message.as_ptr(),
-    );
+    unsafe {
+        fmi3_log_message(
+            std::ptr::null_mut(),
+            fmi3Status::fmi3OK,
+            category.as_ptr(),
+            message.as_ptr(),
+        );
+    }
 
     // Test should complete without panicking
 }
@@ -499,12 +501,14 @@ fn test_fmi3_log_message_callback_with_valid_strings() {
 #[test]
 fn test_fmi3_log_message_callback_with_null_strings() {
     // Should handle null strings gracefully
-    fmi3_log_message(
-        std::ptr::null_mut(),
-        fmi3Status::fmi3Warning,
-        std::ptr::null(),
-        std::ptr::null(),
-    );
+    unsafe {
+        fmi3_log_message(
+            std::ptr::null_mut(),
+            fmi3Status::fmi3Warning,
+            std::ptr::null(),
+            std::ptr::null(),
+        );
+    }
 
     // Test should complete without panicking
 }
@@ -523,12 +527,14 @@ fn test_fmi3_log_message_all_status_levels() {
     ];
 
     for status in status_levels {
-        fmi3_log_message(
-            std::ptr::null_mut(),
-            status,
-            category.as_ptr(),
-            message.as_ptr(),
-        );
+        unsafe {
+            fmi3_log_message(
+                std::ptr::null_mut(),
+                status,
+                category.as_ptr(),
+                message.as_ptr(),
+            );
+        }
     }
 
     // All status levels should be handled without panicking
@@ -539,12 +545,14 @@ fn test_fmi3_log_message_with_special_characters() {
     let category = CString::new("special_chars").unwrap();
     let message = CString::new("Message with émojis 🚀 and ñ special çhars").unwrap();
 
-    fmi3_log_message(
-        std::ptr::null_mut(),
-        fmi3Status::fmi3OK,
-        category.as_ptr(),
-        message.as_ptr(),
-    );
+    unsafe {
+        fmi3_log_message(
+            std::ptr::null_mut(),
+            fmi3Status::fmi3OK,
+            category.as_ptr(),
+            message.as_ptr(),
+        );
+    }
 
     // Should handle UTF-8 properly
 }
@@ -554,12 +562,14 @@ fn test_fmi3_log_message_with_empty_strings() {
     let category = CString::new("").unwrap();
     let message = CString::new("").unwrap();
 
-    fmi3_log_message(
-        std::ptr::null_mut(),
-        fmi3Status::fmi3OK,
-        category.as_ptr(),
-        message.as_ptr(),
-    );
+    unsafe {
+        fmi3_log_message(
+            std::ptr::null_mut(),
+            fmi3Status::fmi3OK,
+            category.as_ptr(),
+            message.as_ptr(),
+        );
+    }
 
     // Empty strings should be handled
 }

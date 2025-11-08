@@ -1,8 +1,8 @@
 // Unit tests for conversion module
 // These tests focus specifically on type conversions between proto and FMI types
 
-use liaison_fmi::fmi3::fmi3Status;
-use liaison_fmi::proto;
+use liaisonfmu::fmi3::fmi3Status;
+use liaisonfmu::proto;
 
 #[test]
 fn test_all_proto_to_fmi_conversions() {

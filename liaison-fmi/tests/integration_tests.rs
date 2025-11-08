@@ -1,8 +1,8 @@
 // Integration tests for the liaison-fmi client library
 // These tests verify the core functionality without requiring a full Zenoh server
 
-use liaison_fmi::fmi3::*;
-use liaison_fmi::proto;
+use liaisonfmu::fmi3::*;
+use liaisonfmu::proto;
 use std::ffi::{CStr, CString};
 use std::ptr;
 

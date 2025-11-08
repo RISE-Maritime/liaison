@@ -1813,7 +1813,7 @@ mod tests {
             _required_intermediate_variables: *const u32,
             _n_required_intermediate_variables: usize,
             _instance_environment: *mut std::ffi::c_void,
-            _log_message: Option<extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
+            _log_message: Option<unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
             _intermediate_update: Option<extern "C" fn(*mut std::ffi::c_void, f64, i32, i32, i32, i32, i32, i32, *mut i32, *mut f64)>,
         ) -> *mut std::ffi::c_void {
             // Return a non-null dummy pointer
@@ -1827,7 +1827,7 @@ mod tests {
             _visible: i32,
             _logging_on: i32,
             _instance_environment: *mut std::ffi::c_void,
-            _log_message: Option<extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
+            _log_message: Option<unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
         ) -> *mut std::ffi::c_void {
             0x5678 as *mut std::ffi::c_void
         }
@@ -1839,7 +1839,7 @@ mod tests {
             _visible: i32,
             _logging_on: i32,
             _instance_environment: *mut std::ffi::c_void,
-            _log_message: Option<extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
+            _log_message: Option<unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
             _clock_update: Option<extern "C" fn(*mut std::ffi::c_void)>,
             _lock_preemption: Option<extern "C" fn()>,
             _unlock_preemption: Option<extern "C" fn()>,
