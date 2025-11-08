@@ -1,0 +1,832 @@
+//! FMU Library Loader
+//!
+//! This module provides platform-specific dynamic loading of FMU libraries and binding
+//! of all FMI 3.0 functions. It uses the `libloading` crate for cross-platform
+//! compatibility.
+//!
+//! The `FmuLibrary` struct encapsulates:
+//! - Platform-specific library handle (DLL on Windows, SO on Linux)
+//! - Function pointers for all 34 FMI 3.0 functions
+//! - Safe Rust wrappers around C function calls
+//!
+//! # Example
+//!
+//! ```no_run
+//! use liaison_server::fmu_loader::FmuLibrary;
+//!
+//! let lib_path = "/path/to/fmu/binaries/x86_64-linux/MyModel.so";
+//! let fmu = FmuLibrary::new(lib_path)?;
+//!
+//! // Use the FMI functions
+//! let version = (fmu.fmi3_get_version)();
+//! ```
+
+use anyhow::{Context, Result};
+use libloading::{Library, Symbol};
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_void};
+use std::path::Path;
+
+// Import FMI types from liaison-fmi crate
+// Note: These types are re-exported from the liaison-fmi crate
+type fmi3Instance = *mut c_void;
+type fmi3InstanceEnvironment = *mut c_void;
+type fmi3ValueReference = u32;
+type fmi3Float32 = f32;
+type fmi3Float64 = f64;
+type fmi3Int8 = i8;
+type fmi3UInt8 = u8;
+type fmi3Int16 = i16;
+type fmi3UInt16 = u16;
+type fmi3Int32 = i32;
+type fmi3UInt32 = u32;
+type fmi3Int64 = i64;
+type fmi3UInt64 = u64;
+type fmi3Boolean = i32;
+type fmi3Char = c_char;
+type fmi3String = *const fmi3Char;
+type fmi3Byte = u8;
+type fmi3Binary = *const fmi3Byte;
+type fmi3Clock = i32;
+type fmi3FMUState = *mut c_void;
+
+/// FMI 3.0 status codes
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum fmi3Status {
+    fmi3OK = 0,
+    fmi3Warning = 1,
+    fmi3Discard = 2,
+    fmi3Error = 3,
+    fmi3Fatal = 4,
+}
+
+// Callback function types
+type fmi3LogMessageCallback = Option<
+    extern "C" fn(
+        instanceEnvironment: fmi3InstanceEnvironment,
+        status: fmi3Status,
+        category: fmi3String,
+        message: fmi3String,
+    ),
+>;
+
+type fmi3IntermediateUpdateCallback = Option<
+    extern "C" fn(
+        instanceEnvironment: fmi3InstanceEnvironment,
+        intermediateUpdateTime: fmi3Float64,
+        eventOccurred: fmi3Boolean,
+        clocksTicked: fmi3Boolean,
+        intermediateVariableSetAllowed: fmi3Boolean,
+        intermediateVariableGetAllowed: fmi3Boolean,
+        intermediateStepFinished: fmi3Boolean,
+        canReturnEarly: fmi3Boolean,
+        earlyReturnRequested: *mut fmi3Boolean,
+        earlyReturnTime: *mut fmi3Float64,
+    ),
+>;
+
+type fmi3ClockUpdateCallback = Option<extern "C" fn(instanceEnvironment: fmi3InstanceEnvironment)>;
+type fmi3LockPreemptionCallback = Option<extern "C" fn()>;
+type fmi3UnlockPreemptionCallback = Option<extern "C" fn()>;
+
+// FMI 3.0 Function Type Definitions
+
+/// fmi3GetVersion function type
+type fmi3GetVersionType = extern "C" fn() -> fmi3String;
+
+/// fmi3SetDebugLogging function type
+type fmi3SetDebugLoggingType = extern "C" fn(
+    instance: fmi3Instance,
+    logging_on: fmi3Boolean,
+    n_categories: usize,
+    categories: *const fmi3String,
+) -> fmi3Status;
+
+/// fmi3InstantiateCoSimulation function type
+type fmi3InstantiateCoSimulationType = extern "C" fn(
+    instance_name: fmi3String,
+    instantiation_token: fmi3String,
+    resource_path: fmi3String,
+    visible: fmi3Boolean,
+    logging_on: fmi3Boolean,
+    event_mode_used: fmi3Boolean,
+    early_return_allowed: fmi3Boolean,
+    required_intermediate_variables: *const fmi3ValueReference,
+    n_required_intermediate_variables: usize,
+    instance_environment: fmi3InstanceEnvironment,
+    log_message: fmi3LogMessageCallback,
+    intermediate_update: fmi3IntermediateUpdateCallback,
+) -> fmi3Instance;
+
+/// fmi3InstantiateModelExchange function type
+type fmi3InstantiateModelExchangeType = extern "C" fn(
+    instance_name: fmi3String,
+    instantiation_token: fmi3String,
+    resource_path: fmi3String,
+    visible: fmi3Boolean,
+    logging_on: fmi3Boolean,
+    instance_environment: fmi3InstanceEnvironment,
+    log_message: fmi3LogMessageCallback,
+) -> fmi3Instance;
+
+/// fmi3InstantiateScheduledExecution function type
+type fmi3InstantiateScheduledExecutionType = extern "C" fn(
+    instance_name: fmi3String,
+    instantiation_token: fmi3String,
+    resource_path: fmi3String,
+    visible: fmi3Boolean,
+    logging_on: fmi3Boolean,
+    instance_environment: fmi3InstanceEnvironment,
+    log_message: fmi3LogMessageCallback,
+    clock_update: fmi3ClockUpdateCallback,
+    lock_preemption: fmi3LockPreemptionCallback,
+    unlock_preemption: fmi3UnlockPreemptionCallback,
+) -> fmi3Instance;
+
+/// fmi3FreeInstance function type
+type fmi3FreeInstanceType = extern "C" fn(instance: fmi3Instance);
+
+/// fmi3EnterInitializationMode function type
+type fmi3EnterInitializationModeType = extern "C" fn(
+    instance: fmi3Instance,
+    tolerance_defined: fmi3Boolean,
+    tolerance: fmi3Float64,
+    start_time: fmi3Float64,
+    stop_time_defined: fmi3Boolean,
+    stop_time: fmi3Float64,
+) -> fmi3Status;
+
+/// fmi3ExitInitializationMode function type
+type fmi3ExitInitializationModeType = extern "C" fn(instance: fmi3Instance) -> fmi3Status;
+
+/// fmi3EnterEventMode function type
+type fmi3EnterEventModeType = extern "C" fn(instance: fmi3Instance) -> fmi3Status;
+
+/// fmi3Terminate function type
+type fmi3TerminateType = extern "C" fn(instance: fmi3Instance) -> fmi3Status;
+
+/// fmi3Reset function type
+type fmi3ResetType = extern "C" fn(instance: fmi3Instance) -> fmi3Status;
+
+/// fmi3DoStep function type
+type fmi3DoStepType = extern "C" fn(
+    instance: fmi3Instance,
+    current_communication_point: fmi3Float64,
+    communication_step_size: fmi3Float64,
+    no_set_fmu_state_prior_to_current_point: fmi3Boolean,
+    event_handling_needed: *mut fmi3Boolean,
+    terminate_simulation: *mut fmi3Boolean,
+    early_return: *mut fmi3Boolean,
+    last_successful_time: *mut fmi3Float64,
+) -> fmi3Status;
+
+// Getter and Setter function types
+type fmi3GetFloat32Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3Float32,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetFloat32Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3Float32,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetFloat64Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3Float64,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetFloat64Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3Float64,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetInt8Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3Int8,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetInt8Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3Int8,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetUInt8Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3UInt8,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetUInt8Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3UInt8,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetInt16Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3Int16,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetInt16Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3Int16,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetUInt16Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3UInt16,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetUInt16Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3UInt16,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetInt32Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3Int32,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetInt32Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3Int32,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetUInt32Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3UInt32,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetUInt32Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3UInt32,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetInt64Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3Int64,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetInt64Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3Int64,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetUInt64Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3UInt64,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetUInt64Type = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3UInt64,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetBooleanType = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3Boolean,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetBooleanType = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3Boolean,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetStringType = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3String,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetStringType = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3String,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetBinaryType = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    value_sizes: *mut usize,
+    values: *mut fmi3Binary,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3SetBinaryType = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    value_sizes: *const usize,
+    values: *const fmi3Binary,
+    n_values: usize,
+) -> fmi3Status;
+
+type fmi3GetClockType = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *mut fmi3Clock,
+) -> fmi3Status;
+
+type fmi3SetClockType = extern "C" fn(
+    instance: fmi3Instance,
+    value_references: *const fmi3ValueReference,
+    n_value_references: usize,
+    values: *const fmi3Clock,
+) -> fmi3Status;
+
+/// FMU Library wrapper that holds the dynamic library handle and all FMI 3.0 function pointers.
+///
+/// This struct provides safe access to the FMI functions loaded from a platform-specific
+/// shared library (.dll on Windows, .so on Linux).
+pub struct FmuLibrary {
+    /// The underlying library handle (kept alive for the duration of the struct)
+    #[allow(dead_code)]
+    library: Library,
+
+    // Common Functions
+    pub fmi3_get_version: fmi3GetVersionType,
+    pub fmi3_set_debug_logging: fmi3SetDebugLoggingType,
+
+    // Instantiation Functions
+    pub fmi3_instantiate_co_simulation: fmi3InstantiateCoSimulationType,
+    pub fmi3_instantiate_model_exchange: fmi3InstantiateModelExchangeType,
+    pub fmi3_instantiate_scheduled_execution: fmi3InstantiateScheduledExecutionType,
+    pub fmi3_free_instance: fmi3FreeInstanceType,
+
+    // Lifecycle Functions
+    pub fmi3_enter_initialization_mode: fmi3EnterInitializationModeType,
+    pub fmi3_exit_initialization_mode: fmi3ExitInitializationModeType,
+    pub fmi3_enter_event_mode: fmi3EnterEventModeType,
+    pub fmi3_terminate: fmi3TerminateType,
+    pub fmi3_reset: fmi3ResetType,
+
+    // Co-Simulation Function
+    pub fmi3_do_step: fmi3DoStepType,
+
+    // Float32 Functions
+    pub fmi3_get_float32: fmi3GetFloat32Type,
+    pub fmi3_set_float32: fmi3SetFloat32Type,
+
+    // Float64 Functions
+    pub fmi3_get_float64: fmi3GetFloat64Type,
+    pub fmi3_set_float64: fmi3SetFloat64Type,
+
+    // Int8 Functions
+    pub fmi3_get_int8: fmi3GetInt8Type,
+    pub fmi3_set_int8: fmi3SetInt8Type,
+
+    // UInt8 Functions
+    pub fmi3_get_uint8: fmi3GetUInt8Type,
+    pub fmi3_set_uint8: fmi3SetUInt8Type,
+
+    // Int16 Functions
+    pub fmi3_get_int16: fmi3GetInt16Type,
+    pub fmi3_set_int16: fmi3SetInt16Type,
+
+    // UInt16 Functions
+    pub fmi3_get_uint16: fmi3GetUInt16Type,
+    pub fmi3_set_uint16: fmi3SetUInt16Type,
+
+    // Int32 Functions
+    pub fmi3_get_int32: fmi3GetInt32Type,
+    pub fmi3_set_int32: fmi3SetInt32Type,
+
+    // UInt32 Functions
+    pub fmi3_get_uint32: fmi3GetUInt32Type,
+    pub fmi3_set_uint32: fmi3SetUInt32Type,
+
+    // Int64 Functions
+    pub fmi3_get_int64: fmi3GetInt64Type,
+    pub fmi3_set_int64: fmi3SetInt64Type,
+
+    // UInt64 Functions
+    pub fmi3_get_uint64: fmi3GetUInt64Type,
+    pub fmi3_set_uint64: fmi3SetUInt64Type,
+
+    // Boolean Functions
+    pub fmi3_get_boolean: fmi3GetBooleanType,
+    pub fmi3_set_boolean: fmi3SetBooleanType,
+
+    // String Functions
+    pub fmi3_get_string: fmi3GetStringType,
+    pub fmi3_set_string: fmi3SetStringType,
+
+    // Binary Functions
+    pub fmi3_get_binary: fmi3GetBinaryType,
+    pub fmi3_set_binary: fmi3SetBinaryType,
+
+    // Clock Functions
+    pub fmi3_get_clock: fmi3GetClockType,
+    pub fmi3_set_clock: fmi3SetClockType,
+}
+
+impl FmuLibrary {
+    /// Creates a new FmuLibrary by loading the library at the given path.
+    ///
+    /// # Arguments
+    ///
+    /// * `lib_path` - Path to the FMU shared library file (.dll on Windows, .so on Linux)
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the FmuLibrary on success, or an error if:
+    /// - The library file cannot be found
+    /// - The library cannot be loaded
+    /// - Any required FMI function cannot be found in the library
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use liaison_server::fmu_loader::FmuLibrary;
+    ///
+    /// let fmu = FmuLibrary::new("/path/to/model.so")?;
+    /// ```
+    pub fn new<P: AsRef<Path>>(lib_path: P) -> Result<Self> {
+        let lib_path = lib_path.as_ref();
+
+        // Load the library with detailed error reporting
+        let library = unsafe {
+            Library::new(lib_path).with_context(|| {
+                format!(
+                    "Failed to load FMU library from path: {}",
+                    lib_path.display()
+                )
+            })?
+        };
+
+        // Helper macro to load a function symbol with error handling
+        macro_rules! load_symbol {
+            ($name:expr, $type:ty) => {{
+                unsafe {
+                    let symbol: Symbol<$type> = library
+                        .get($name)
+                        .with_context(|| format!("Failed to load function {:?} from FMU library", $name))?;
+                    *symbol
+                }
+            }};
+        }
+
+        // Load all FMI 3.0 functions BEFORE constructing the struct
+        // This is necessary because we need to borrow `library` to load symbols,
+        // but then move `library` into the struct to keep it alive.
+
+        // Common Functions
+        let fmi3_get_version = load_symbol!(b"fmi3GetVersion\0", fmi3GetVersionType);
+        let fmi3_set_debug_logging = load_symbol!(b"fmi3SetDebugLogging\0", fmi3SetDebugLoggingType);
+
+        // Instantiation Functions
+        let fmi3_instantiate_co_simulation = load_symbol!(
+            b"fmi3InstantiateCoSimulation\0",
+            fmi3InstantiateCoSimulationType
+        );
+        let fmi3_instantiate_model_exchange = load_symbol!(
+            b"fmi3InstantiateModelExchange\0",
+            fmi3InstantiateModelExchangeType
+        );
+        let fmi3_instantiate_scheduled_execution = load_symbol!(
+            b"fmi3InstantiateScheduledExecution\0",
+            fmi3InstantiateScheduledExecutionType
+        );
+        let fmi3_free_instance = load_symbol!(b"fmi3FreeInstance\0", fmi3FreeInstanceType);
+
+        // Lifecycle Functions
+        let fmi3_enter_initialization_mode = load_symbol!(
+            b"fmi3EnterInitializationMode\0",
+            fmi3EnterInitializationModeType
+        );
+        let fmi3_exit_initialization_mode = load_symbol!(
+            b"fmi3ExitInitializationMode\0",
+            fmi3ExitInitializationModeType
+        );
+        let fmi3_enter_event_mode = load_symbol!(b"fmi3EnterEventMode\0", fmi3EnterEventModeType);
+        let fmi3_terminate = load_symbol!(b"fmi3Terminate\0", fmi3TerminateType);
+        let fmi3_reset = load_symbol!(b"fmi3Reset\0", fmi3ResetType);
+
+        // Co-Simulation Function
+        let fmi3_do_step = load_symbol!(b"fmi3DoStep\0", fmi3DoStepType);
+
+        // Float32 Functions
+        let fmi3_get_float32 = load_symbol!(b"fmi3GetFloat32\0", fmi3GetFloat32Type);
+        let fmi3_set_float32 = load_symbol!(b"fmi3SetFloat32\0", fmi3SetFloat32Type);
+
+        // Float64 Functions
+        let fmi3_get_float64 = load_symbol!(b"fmi3GetFloat64\0", fmi3GetFloat64Type);
+        let fmi3_set_float64 = load_symbol!(b"fmi3SetFloat64\0", fmi3SetFloat64Type);
+
+        // Int8 Functions
+        let fmi3_get_int8 = load_symbol!(b"fmi3GetInt8\0", fmi3GetInt8Type);
+        let fmi3_set_int8 = load_symbol!(b"fmi3SetInt8\0", fmi3SetInt8Type);
+
+        // UInt8 Functions
+        let fmi3_get_uint8 = load_symbol!(b"fmi3GetUInt8\0", fmi3GetUInt8Type);
+        let fmi3_set_uint8 = load_symbol!(b"fmi3SetUInt8\0", fmi3SetUInt8Type);
+
+        // Int16 Functions
+        let fmi3_get_int16 = load_symbol!(b"fmi3GetInt16\0", fmi3GetInt16Type);
+        let fmi3_set_int16 = load_symbol!(b"fmi3SetInt16\0", fmi3SetInt16Type);
+
+        // UInt16 Functions
+        let fmi3_get_uint16 = load_symbol!(b"fmi3GetUInt16\0", fmi3GetUInt16Type);
+        let fmi3_set_uint16 = load_symbol!(b"fmi3SetUInt16\0", fmi3SetUInt16Type);
+
+        // Int32 Functions
+        let fmi3_get_int32 = load_symbol!(b"fmi3GetInt32\0", fmi3GetInt32Type);
+        let fmi3_set_int32 = load_symbol!(b"fmi3SetInt32\0", fmi3SetInt32Type);
+
+        // UInt32 Functions
+        let fmi3_get_uint32 = load_symbol!(b"fmi3GetUInt32\0", fmi3GetUInt32Type);
+        let fmi3_set_uint32 = load_symbol!(b"fmi3SetUInt32\0", fmi3SetUInt32Type);
+
+        // Int64 Functions
+        let fmi3_get_int64 = load_symbol!(b"fmi3GetInt64\0", fmi3GetInt64Type);
+        let fmi3_set_int64 = load_symbol!(b"fmi3SetInt64\0", fmi3SetInt64Type);
+
+        // UInt64 Functions
+        let fmi3_get_uint64 = load_symbol!(b"fmi3GetUInt64\0", fmi3GetUInt64Type);
+        let fmi3_set_uint64 = load_symbol!(b"fmi3SetUInt64\0", fmi3SetUInt64Type);
+
+        // Boolean Functions
+        let fmi3_get_boolean = load_symbol!(b"fmi3GetBoolean\0", fmi3GetBooleanType);
+        let fmi3_set_boolean = load_symbol!(b"fmi3SetBoolean\0", fmi3SetBooleanType);
+
+        // String Functions
+        let fmi3_get_string = load_symbol!(b"fmi3GetString\0", fmi3GetStringType);
+        let fmi3_set_string = load_symbol!(b"fmi3SetString\0", fmi3SetStringType);
+
+        // Binary Functions
+        let fmi3_get_binary = load_symbol!(b"fmi3GetBinary\0", fmi3GetBinaryType);
+        let fmi3_set_binary = load_symbol!(b"fmi3SetBinary\0", fmi3SetBinaryType);
+
+        // Clock Functions
+        let fmi3_get_clock = load_symbol!(b"fmi3GetClock\0", fmi3GetClockType);
+        let fmi3_set_clock = load_symbol!(b"fmi3SetClock\0", fmi3SetClockType);
+
+        // Now construct the struct with all loaded symbols
+        Ok(Self {
+            // Store the library handle to keep it alive
+            library,
+
+            // Common Functions
+            fmi3_get_version,
+            fmi3_set_debug_logging,
+
+            // Instantiation Functions
+            fmi3_instantiate_co_simulation,
+            fmi3_instantiate_model_exchange,
+            fmi3_instantiate_scheduled_execution,
+            fmi3_free_instance,
+
+            // Lifecycle Functions
+            fmi3_enter_initialization_mode,
+            fmi3_exit_initialization_mode,
+            fmi3_enter_event_mode,
+            fmi3_terminate,
+            fmi3_reset,
+
+            // Co-Simulation Function
+            fmi3_do_step,
+
+            // Float32 Functions
+            fmi3_get_float32,
+            fmi3_set_float32,
+
+            // Float64 Functions
+            fmi3_get_float64,
+            fmi3_set_float64,
+
+            // Int8 Functions
+            fmi3_get_int8,
+            fmi3_set_int8,
+
+            // UInt8 Functions
+            fmi3_get_uint8,
+            fmi3_set_uint8,
+
+            // Int16 Functions
+            fmi3_get_int16,
+            fmi3_set_int16,
+
+            // UInt16 Functions
+            fmi3_get_uint16,
+            fmi3_set_uint16,
+
+            // Int32 Functions
+            fmi3_get_int32,
+            fmi3_set_int32,
+
+            // UInt32 Functions
+            fmi3_get_uint32,
+            fmi3_set_uint32,
+
+            // Int64 Functions
+            fmi3_get_int64,
+            fmi3_set_int64,
+
+            // UInt64 Functions
+            fmi3_get_uint64,
+            fmi3_set_uint64,
+
+            // Boolean Functions
+            fmi3_get_boolean,
+            fmi3_set_boolean,
+
+            // String Functions
+            fmi3_get_string,
+            fmi3_set_string,
+
+            // Binary Functions
+            fmi3_get_binary,
+            fmi3_set_binary,
+
+            // Clock Functions
+            fmi3_get_clock,
+            fmi3_set_clock,
+        })
+    }
+}
+
+// Implement Debug for FmuLibrary
+impl std::fmt::Debug for FmuLibrary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Get FMI version string to include in debug output
+        let version_ptr = (self.fmi3_get_version)();
+        let version_str = if !version_ptr.is_null() {
+            unsafe {
+                CStr::from_ptr(version_ptr)
+                    .to_str()
+                    .unwrap_or("<invalid UTF-8>")
+            }
+        } else {
+            "<null>"
+        };
+
+        f.debug_struct("FmuLibrary")
+            .field("fmi_version", &version_str)
+            .field("has_fmi3_get_version", &true)
+            .field("has_fmi3_set_debug_logging", &true)
+            .field("has_fmi3_instantiate_co_simulation", &true)
+            .field("has_fmi3_instantiate_model_exchange", &true)
+            .field("has_fmi3_instantiate_scheduled_execution", &true)
+            .field("has_fmi3_free_instance", &true)
+            .field("has_fmi3_enter_initialization_mode", &true)
+            .field("has_fmi3_exit_initialization_mode", &true)
+            .field("has_fmi3_enter_event_mode", &true)
+            .field("has_fmi3_terminate", &true)
+            .field("has_fmi3_reset", &true)
+            .field("has_fmi3_do_step", &true)
+            .finish_non_exhaustive()
+    }
+}
+
+// The Drop implementation is automatic - when FmuLibrary goes out of scope,
+// the Library will be dropped and unloaded automatically.
+
+/// Constructs the platform-specific library path for an FMU.
+///
+/// Based on the C++ implementation in liaison.cpp lines 743-753, this function
+/// constructs the path to the binary within an extracted FMU archive.
+///
+/// # Arguments
+///
+/// * `temp_path` - The path to the extracted FMU directory
+/// * `model_name` - The name of the model (without extension)
+///
+/// # Returns
+///
+/// A String containing the full path to the platform-specific shared library.
+///
+/// # Platform-specific paths
+///
+/// - Windows (64-bit): `{temp_path}/binaries/x86_64-windows/{model_name}.dll`
+/// - Windows (32-bit): `{temp_path}/binaries/x86-windows/{model_name}.dll`
+/// - Linux (64-bit): `{temp_path}/binaries/x86_64-linux/{model_name}.so`
+///
+/// # Example
+///
+/// ```
+/// use liaison_server::fmu_loader::construct_library_path;
+///
+/// let path = construct_library_path("/tmp/fmu_extract", "BouncingBall");
+/// // On Linux: "/tmp/fmu_extract/binaries/x86_64-linux/BouncingBall.so"
+/// // On Windows 64-bit: "/tmp/fmu_extract/binaries/x86_64-windows/BouncingBall.dll"
+/// ```
+pub fn construct_library_path(temp_path: &str, model_name: &str) -> String {
+    #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
+    {
+        format!("{}/binaries/x86_64-windows/{}.dll", temp_path, model_name)
+    }
+
+    #[cfg(all(target_os = "windows", target_pointer_width = "32"))]
+    {
+        format!("{}/binaries/x86-windows/{}.dll", temp_path, model_name)
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        format!("{}/binaries/x86_64-linux/{}.so", temp_path, model_name)
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        compile_error!("Unsupported platform - only Windows and Linux are supported")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_construct_library_path() {
+        let path = construct_library_path("/tmp/fmu", "MyModel");
+
+        #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
+        assert_eq!(path, "/tmp/fmu/binaries/x86_64-windows/MyModel.dll");
+
+        #[cfg(all(target_os = "windows", target_pointer_width = "32"))]
+        assert_eq!(path, "/tmp/fmu/binaries/x86-windows/MyModel.dll");
+
+        #[cfg(target_os = "linux")]
+        assert_eq!(path, "/tmp/fmu/binaries/x86_64-linux/MyModel.so");
+    }
+
+    #[test]
+    fn test_construct_library_path_with_special_chars() {
+        let path = construct_library_path("/tmp/my_fmu_123", "Model-v2.0");
+
+        #[cfg(target_os = "linux")]
+        assert_eq!(path, "/tmp/my_fmu_123/binaries/x86_64-linux/Model-v2.0.so");
+    }
+}

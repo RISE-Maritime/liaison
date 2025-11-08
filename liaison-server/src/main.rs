@@ -10,6 +10,10 @@ mod proto;
 mod server;
 mod fmu_creator;
 mod utils;
+mod fmu_loader;
+mod instance_manager;
+mod callbacks;
+mod queryable_handlers;
 
 #[derive(Parser)]
 #[command(name = "liaison")]
