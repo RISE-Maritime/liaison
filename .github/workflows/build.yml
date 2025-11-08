@@ -81,9 +81,10 @@ jobs:
       
       - name: Debug protoc
         run: |
-          dir C:\vcpkg\installed\x64-mingw-static\tools\protobuf
-          Get-Command protoc.exe
-          protoc --version
+          $PROTOC_PATH = "C:\vcpkg\installed\x64-mingw-static\tools\protobuf\protoc.exe"
+          echo "PROTOC_PATH=$PROTOC_PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "Found protoc at: $PROTOC_PATH\protoc.exe"
+          & "$PROTOC_PATH\protoc.exe" --version
 
       - name: Build and install Zenoh-c
         run: |
