@@ -21,6 +21,7 @@ thiserror = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libloading = { workspace = true }
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 libloading = { workspace = true }

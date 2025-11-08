@@ -41,13 +41,13 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - [x] 3.2 Create type conversion utilities (proto Status <-> FMI status) - COMPLETED
 
 ### Phase 4: Client Library (fmi3Functions)
-- [ ] 4.1 Port Placeholder class and session management
-- [ ] 4.2 Port FMI common functions (GetVersion, SetDebugLogging, etc.)
-- [ ] 4.3 Port FMI instantiation functions
-- [ ] 4.4 Port FMI get/set value functions (Float32/64, Int*, UInt*, Boolean, String, Binary, Clock)
-- [ ] 4.5 Port FMI lifecycle functions (Initialize, Terminate, Reset, etc.)
-- [ ] 4.6 Port FMI co-simulation functions (DoStep)
-- [ ] 4.7 Set up C ABI export for shared library
+- [~] 4.1 Port Placeholder class and session management - DESIGN COMPLETE (see PHASE4_DESIGN.md)
+- [~] 4.2 Port FMI common functions (GetVersion, SetDebugLogging, etc.) - DESIGN COMPLETE
+- [~] 4.3 Port FMI instantiation functions - DESIGN COMPLETE
+- [~] 4.4 Port FMI get/set value functions (Float32/64, Int*, UInt*, Boolean, String, Binary, Clock) - DESIGN COMPLETE
+- [~] 4.5 Port FMI lifecycle functions (Initialize, Terminate, Reset, etc.) - DESIGN COMPLETE
+- [~] 4.6 Port FMI co-simulation functions (DoStep) - DESIGN COMPLETE
+- [x] 4.7 Set up C ABI export for shared library - COMPLETED (cdylib in Cargo.toml)
 
 ### Phase 5: Server Application (liaison)
 - [ ] 5.1 Port FMU library loading (platform-specific dlopen/LoadLibrary)
@@ -71,9 +71,9 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - [ ] 7.3 Create migration guide
 
 ## Current Status
-**Phase:** 3 - Protocol Buffers (COMPLETED)
+**Phase:** 4 - Client Library (IN PROGRESS - Design Complete)
 **Last Updated:** 2025-11-08
-**Next Step:** 4.1 - Port Placeholder class and session management
+**Next Step:** Integration of Phase 4 components (see PHASE4_DESIGN.md)
 
 ## Completed Work
 
@@ -112,6 +112,38 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
   - Added comprehensive unit tests for all conversion functions
 - All tests pass successfully (3 conversion tests)
 - Protobuf messages are automatically generated at build time
+
+### Phase 4 Design Work (Completed via Subagents)
+- **Placeholder Class**: Designed comprehensive Rust implementation with:
+  - Zenoh session management using Arc for thread-safe sharing
+  - Configuration loading from config.json with TLS certificate path resolution
+  - Log message subscriber for receiving server logs
+  - Generic query() method for Zenoh RPC calls
+  - Proper resource cleanup in Drop implementation
+- **Utility Functions**: Implemented get_base_directory() with platform-specific code:
+  - Windows: Uses GetModuleHandleEx/GetModuleFileName
+  - Unix: Uses dladdr
+  - Returns grandparent directory of shared library
+- **FMI Common Functions**: Designed GetVersion, SetDebugLogging, FreeInstance
+- **FMI Instantiation**: Designed all three instantiation functions:
+  - InstantiateCoSimulation, InstantiateModelExchange, InstantiateScheduledExecution
+  - Handles Placeholder creation, Zenoh session init, and instance index tracking
+- **FMI Lifecycle**: Designed 6 lifecycle functions:
+  - EnterInitializationMode, ExitInitializationMode
+  - Terminate, Reset
+  - EnterConfigurationMode, ExitConfigurationMode
+- **FMI Get/Set Values**: Created macro-based generators for all FMI types:
+  - Numeric types: Float32/64, Int8/16/32/64, UInt8/16/32/64
+  - Boolean, String, Binary, Clock
+  - Special handling for C strings and binary data
+- **FMI DoStep**: Designed main co-simulation stepping function
+- **Documentation**: Created comprehensive PHASE4_DESIGN.md with:
+  - Complete implementation details
+  - Integration checklist
+  - Testing strategy
+  - Known limitations
+
+**Note**: Phase 4 designs are ready for integration but not yet compiled/tested. See PHASE4_DESIGN.md for details.
 
 ## Notes
 - Maintain C ABI compatibility for the client library (cdylib)
