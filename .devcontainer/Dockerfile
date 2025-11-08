@@ -1,5 +1,5 @@
 # Use the official Ubuntu 22.04 LTS image
-FROM ubuntu:22.04
+FROM node:20
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -8,13 +8,17 @@ ENV PROTOBUF_VERSION=3.20.1
 ENV LIBZIP_VERSION=1.10.1
 ENV SPDLOG_VERSION=v1.15.1
 
-# Install required packages
-RUN apt-get update && apt-get install -y \
+#Install required packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
     curl \
     wget \
+    iptables \
+    ipset \
+    iproute2 \
+    dnsutils \
     zlib1g-dev \
     libbz2-dev \
     liblzma-dev \
@@ -23,10 +27,10 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     python3 \
     python3-pip \
-    python3-venv \
-    sudo
-RUN rm -rf /var/lib/apt/lists/*
-
+    python3-venv  \
+    sudo \
+    jq \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain 1.75.0 -y \
@@ -37,8 +41,6 @@ ENV PATH="/root/.cargo/bin:$PATH"
 
 # Verify Rust and Cargo installation
 RUN rustup --version && cargo --version
-
-WORKDIR /workspaces
 
 # Build and install Zenoh-c
 RUN git clone --depth 1 --branch ${ZENOH_VERSION} https://github.com/eclipse-zenoh/zenoh-c.git /workspaces/zenoh-c
@@ -85,17 +87,37 @@ RUN wget https://libzip.org/download/libzip-${LIBZIP_VERSION}.tar.gz && \
     && make install
 RUN rm -rf /libzip-${LIBZIP_VERSION} /libzip-${LIBZIP_VERSION}.tar.gz
 
-# Python and FMPy
-RUN python3 -m pip install fmpy[complete]==0.3.20
+ARG CLAUDE_CODE_VERSION=latest
 
-# Create a non-root user 
-ENV USERNAME=developer
-RUN useradd -m -s /bin/bash $USERNAME
-RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-USER ${USERNAME}
+# Ensure default node user has access to /usr/local/share
+RUN mkdir -p /usr/local/share/npm-global && \
+  chown -R node:node /usr/local/share
 
-# Copy the workspace files to the container
-COPY . /workspaces
+# Set `DEVCONTAINER` environment variable to help with orientation
+ENV DEVCONTAINER=true
 
-CMD ["/bin/bash"]
+# Create workspace and config directories and set permissions
+RUN mkdir -p /workspace /home/node/.claude && \
+  chown -R node:node /workspace /home/node/.claude
+
+WORKDIR /workspace
+
+USER node
+
+# Install global packages
+ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
+ENV PATH=$PATH:/usr/local/share/npm-global/bin
+
+# Install Claude
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+
+# Copy and set up firewall script
+COPY init-firewall.sh /usr/local/bin/
+USER root
+RUN chmod +x /usr/local/bin/init-firewall.sh && \
+  echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
+  chmod 0440 /etc/sudoers.d/node-firewall
+USER node
+
+
