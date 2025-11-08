@@ -13,7 +13,9 @@ pub fn create_directories<P: AsRef<Path>>(path: P) -> Result<()> {
 /// Create a temporary directory for FMU extraction
 pub fn create_temp_directory() -> Result<String> {
     let temp_dir = tempfile::tempdir()?;
-    let path = temp_dir.into_path().to_string_lossy().to_string();
+    let path = temp_dir.path().to_string_lossy().to_string();
+    // Keep the directory alive by preventing automatic cleanup
+    std::mem::forget(temp_dir);
     Ok(path)
 }
 

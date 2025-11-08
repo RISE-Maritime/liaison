@@ -32,13 +32,13 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - [x] 1.4 Configure protobuf code generation with prost-build - COMPLETED
 
 ### Phase 2: Core Utilities
-- [ ] 2.1 Port utils.cpp - temp directory and file utilities
-- [ ] 2.2 Port FMU unzipping functionality
-- [ ] 2.3 Port ZIP archive manipulation
+- [x] 2.1 Port utils.cpp - temp directory and file utilities - COMPLETED
+- [x] 2.2 Port FMU unzipping functionality - COMPLETED
+- [x] 2.3 Port ZIP archive manipulation - COMPLETED
 
 ### Phase 3: Protocol Buffers
-- [ ] 3.1 Generate Rust protobuf code from fmi3.proto
-- [ ] 3.2 Create type conversion utilities (proto Status <-> FMI status)
+- [x] 3.1 Generate Rust protobuf code from fmi3.proto - COMPLETED
+- [x] 3.2 Create type conversion utilities (proto Status <-> FMI status) - COMPLETED
 
 ### Phase 4: Client Library (fmi3Functions)
 - [ ] 4.1 Port Placeholder class and session management
@@ -71,9 +71,9 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - [ ] 7.3 Create migration guide
 
 ## Current Status
-**Phase:** 1 - Project Setup (COMPLETED)
+**Phase:** 3 - Protocol Buffers (COMPLETED)
 **Last Updated:** 2025-11-08
-**Next Step:** 2.1 - Port utils.cpp - temp directory and file utilities
+**Next Step:** 4.1 - Port Placeholder class and session management
 
 ## Completed Work
 
@@ -94,6 +94,24 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - Successfully built both crates with `cargo build`
 - Passed `cargo clippy` linting with only expected warnings (unused code for stubs)
 - All code compiles cleanly on Linux (x86_64-unknown-linux-gnu)
+
+### Phase 2 Achievements
+- Ported all utility functions from utils.cpp to Rust:
+  - `create_directories`: Creates directories recursively using std::fs::create_dir_all
+  - `create_temp_directory`: Creates temporary directories using tempfile crate
+  - `unzip_fmu`: Unzips FMU files using zip crate with full error handling
+  - `add_file_to_fmu`: Adds files to ZIP archives with proper buffering
+- Fixed deprecation warning by using std::mem::forget instead of deprecated into_path()
+- All utility functions use idiomatic Rust patterns (Result types, Path generics)
+
+### Phase 3 Achievements
+- Generated Rust protobuf code from fmi3.proto using prost-build
+- Created comprehensive type conversion utilities in liaison-fmi/src/conversions.rs:
+  - ProtoStatus <-> fmi3Status bidirectional conversions using From traits
+  - i32 -> fmi3Status conversion for deserializing status codes
+  - Added comprehensive unit tests for all conversion functions
+- All tests pass successfully (3 conversion tests)
+- Protobuf messages are automatically generated at build time
 
 ## Notes
 - Maintain C ABI compatibility for the client library (cdylib)

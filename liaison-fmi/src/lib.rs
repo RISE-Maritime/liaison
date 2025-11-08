@@ -8,6 +8,7 @@
 pub mod fmi3;
 mod proto;
 mod placeholder;
+mod conversions;
 
 // Re-export the FMI functions
 pub use fmi3::*;
