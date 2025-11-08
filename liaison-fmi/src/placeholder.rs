@@ -9,7 +9,7 @@ use prost::Message;
 use serde_json::Value as JsonValue;
 use std::ffi::CString;
 use std::sync::Arc;
-use zenoh::prelude::*;
+use zenoh::Wait;
 
 /// Placeholder structure that manages FMI instance state and Zenoh communication
 pub struct Placeholder {
@@ -103,7 +103,7 @@ impl Placeholder {
                 .context("Failed to serialize Zenoh config")?;
 
             zenoh::Config::from_json5(&config_str)
-                .context("Failed to parse Zenoh config from JSON")?
+                .map_err(|e| anyhow::anyhow!("Failed to parse Zenoh config from JSON: {:?}", e))?
         } else {
             // Use default config if zenohConfig is not specified
             zenoh::Config::default()
@@ -112,7 +112,7 @@ impl Placeholder {
         // Open Zenoh session
         let session = zenoh::open(zenoh_config)
             .wait()
-            .context("Failed to open Zenoh session")?;
+            .map_err(|e| anyhow::anyhow!("Failed to open Zenoh session: {:?}", e))?;
 
         let session = Arc::new(session);
 
@@ -139,19 +139,21 @@ impl Placeholder {
     /// Add a subscriber for log messages from the remote FMU
     fn add_log_message_subscriber(&mut self) -> Result<()> {
         let log_message_callback = self.log_message;
-        let instance_environment = self.instance_environment;
+        // Convert raw pointer to usize for thread safety (Send)
+        let instance_environment_addr = self.instance_environment as usize;
 
         // Construct the key expression for log messages
         let expr = format!("rpc/{}/fmi3LogMessage", self.responder_id);
-        let key_expr = KeyExpr::try_from(expr.clone())
-            .with_context(|| format!("Failed to create key expression: {}", expr))?;
+        let key_expr = zenoh::key_expr::KeyExpr::try_from(expr.clone())
+            .map_err(|e| anyhow::anyhow!("Failed to create key expression {}: {:?}", expr, e))?;
 
         // Create subscriber with callback
         let subscriber = self.session
             .declare_subscriber(&key_expr)
             .callback(move |sample| {
                 // Parse the protobuf message
-                if let Ok(log_msg) = proto::LogMessage::decode(sample.payload().reader()) {
+                let payload_bytes = sample.payload().to_bytes();
+                if let Ok(log_msg) = proto::LogMessage::decode(payload_bytes.as_ref()) {
                     // Convert proto Status to fmi3Status
                     let status: fmi3Status = proto::Status::try_from(log_msg.status)
                         .unwrap_or(proto::Status::Error)
@@ -164,6 +166,8 @@ impl Placeholder {
                     ) {
                         // Call the log message callback if it exists
                         if let Some(callback) = log_message_callback {
+                            // Convert back to pointer
+                            let instance_environment = instance_environment_addr as fmi3InstanceEnvironment;
                             callback(
                                 instance_environment,
                                 status,
@@ -175,7 +179,7 @@ impl Placeholder {
                 }
             })
             .wait()
-            .context("Failed to create log message subscriber")?;
+            .map_err(|e| anyhow::anyhow!("Failed to create log message subscriber: {:?}", e))?;
 
         self.log_message_subscriber = Some(subscriber);
 
@@ -207,23 +211,23 @@ impl Placeholder {
 
         // Construct the key expression
         let expr = format!("rpc/{}/{}", self.responder_id, fmi3_function);
-        let key_expr = KeyExpr::try_from(expr.clone())
-            .with_context(|| format!("Failed to create key expression: {}", expr))?;
+        let key_expr = zenoh::key_expr::KeyExpr::try_from(expr.clone())
+            .map_err(|e| anyhow::anyhow!("Failed to create key expression {}: {:?}", expr, e))?;
 
         // Create query with payload
         let replies = self.session
             .get(&key_expr)
             .payload(input_wire)
-            .target(QueryTarget::All)
             .wait()
-            .with_context(|| format!("Failed to send query to {}", expr))?;
+            .map_err(|e| anyhow::anyhow!("Failed to send query to {}: {:?}", expr, e))?;
 
         // Wait for and process the first reply
         while let Ok(reply) = replies.recv() {
             match reply.result() {
                 Ok(sample) => {
                     // Deserialize the response
-                    let output = O::decode(sample.payload().reader())
+                    let payload_bytes = sample.payload().to_bytes();
+                    let output = O::decode(payload_bytes.as_ref())
                         .context("Failed to deserialize output message")?;
                     return Ok(output);
                 }
