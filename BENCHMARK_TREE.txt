@@ -1,0 +1,185 @@
+Liaison FMI Benchmark Suite
+============================
+
+Benchmark File Structure:
+-------------------------
+
+liaison-fmi/benches/client_benchmarks.rs (600 lines)
+│
+├── Protobuf Serialization/Deserialization (8 functions)
+│   ├── bench_protobuf_encode
+│   │   ├── instance_message
+│   │   ├── status_message
+│   │   ├── do_step_message
+│   │   ├── float64_set_message [1, 10, 100, 1000]
+│   │   ├── int32_set_message [1, 10, 100, 1000]
+│   │   ├── instantiate_cosimulation
+│   │   └── log_message
+│   │
+│   ├── bench_protobuf_decode
+│   │   ├── instance_message
+│   │   ├── status_message
+│   │   ├── do_step_message
+│   │   ├── float64_get_message [1, 10, 100, 1000]
+│   │   └── log_message
+│   │
+│   ├── bench_protobuf_roundtrip
+│   │   ├── instance_message
+│   │   ├── do_step_message
+│   │   └── float64_message [1, 10, 100, 1000]
+│   │
+│   └── bench_encoded_len
+│       ├── instance_message
+│       ├── do_step_message
+│       └── float64_message [1, 10, 100, 1000]
+│
+├── Type Conversions (1 function)
+│   └── bench_status_conversions
+│       ├── proto_to_fmi_ok
+│       ├── proto_to_fmi_error
+│       ├── proto_to_fmi_fatal
+│       ├── fmi_to_proto_ok
+│       ├── fmi_to_proto_error
+│       ├── i32_to_fmi_valid
+│       ├── i32_to_fmi_invalid
+│       ├── roundtrip_proto_fmi_proto
+│       ├── roundtrip_fmi_proto_fmi
+│       └── batch_proto_to_fmi [5 statuses]
+│
+├── Message Creation (1 function)
+│   └── bench_message_creation
+│       ├── simple_instance_message
+│       ├── do_step_message
+│       ├── float64_message_with_vectors [1, 10, 100, 1000]
+│       └── instantiate_message_with_strings
+│
+└── String Operations (1 function)
+    └── bench_string_operations
+        ├── log_message_creation [10, 100, 1000 chars]
+        └── log_message_encode [10, 100, 1000 chars]
+
+
+liaison-server/benches/server_benchmarks.rs (775 lines)
+│
+├── Instance Manager (6 functions)
+│   ├── bench_instance_manager_add
+│   │   ├── single_add
+│   │   └── batch_add [10, 100, 1000]
+│   │
+│   ├── bench_instance_manager_get
+│   │   ├── single_get_success
+│   │   ├── single_get_not_found
+│   │   ├── single_get_invalid_index
+│   │   ├── multiple_get_random [10, 100, 1000]
+│   │   └── sequential_gets_100
+│   │
+│   ├── bench_instance_manager_remove
+│   │   ├── single_remove_success
+│   │   ├── single_remove_not_found
+│   │   └── batch_remove [10, 100, 1000]
+│   │
+│   ├── bench_instance_manager_queries
+│   │   ├── instance_count [0, 10, 100, 1000]
+│   │   ├── contains_instance_exists
+│   │   └── contains_instance_not_exists
+│   │
+│   ├── bench_instance_manager_mixed_workload
+│   │   ├── simulation_pattern_small (10 instances)
+│   │   └── simulation_pattern_large (100 instances)
+│   │
+│   └── bench_instance_manager_concurrent_access
+│       ├── clone_manager
+│       └── multi_clone_access
+│
+├── Protobuf (Server-side) (1 function)
+│   └── bench_server_protobuf_operations
+│       ├── instance_message_encode
+│       ├── instance_message_decode
+│       ├── status_message_roundtrip
+│       └── float64_output_encode [1, 10, 100, 1000]
+│
+├── FMU Creator (2 functions)
+│   ├── bench_json_config_operations
+│   │   ├── parse_simple_config
+│   │   ├── parse_complex_config
+│   │   ├── serialize_config
+│   │   ├── serialize_config_pretty
+│   │   ├── extract_responder_id
+│   │   └── modify_config_add_metadata
+│   │
+│   └── bench_path_operations
+│       ├── extract_model_name
+│       ├── extract_cert_filename
+│       ├── build_output_path
+│       └── format_library_paths
+│
+└── Utilities (3 functions)
+    ├── bench_error_handling
+    │   ├── create_instance_not_found_error
+    │   ├── create_invalid_index_error
+    │   ├── format_error_message
+    │   ├── result_match_ok
+    │   └── result_match_err
+    │
+    ├── bench_string_operations
+    │   ├── format_key_expression
+    │   ├── string_clone [10, 100, 1000 chars]
+    │   └── str_to_string
+    │
+    └── bench_vector_operations
+        ├── vec_with_capacity [10, 100, 1000]
+        ├── vec_populate [10, 100, 1000]
+        └── vec_floats [10, 100, 1000]
+
+
+Documentation Files:
+--------------------
+
+BENCHMARKS.md
+├── Overview and Features
+├── Detailed Benchmark Descriptions
+├── Running Instructions
+├── Interpreting Results
+├── Performance Guidelines
+├── CI Integration
+├── Troubleshooting
+├── Adding New Benchmarks
+└── Best Practices
+
+BENCHMARK_QUICK_START.md
+├── Quick Commands
+├── Common Use Cases
+├── Expected Results
+├── Tips and Troubleshooting
+└── Example Output
+
+BENCHMARK_SUMMARY.md
+├── Implementation Overview
+├── Coverage Summary
+├── File Structure
+├── Running Instructions
+├── Performance Expectations
+├── Integration Guide
+└── Success Criteria
+
+BENCHMARK_MATRIX.md
+├── Coverage Tables
+├── Component Mapping
+├── Performance Categories
+├── Data Size Analysis
+├── Error Path Coverage
+└── Quality Metrics
+
+
+Statistics:
+-----------
+Total Benchmark Functions:     20
+Total Benchmark Scenarios:     ~120
+Client Scenarios:              ~50
+Server Scenarios:              ~70
+Data Size Variations:          55+
+Error Cases:                   9
+Total Lines of Code:           1,375
+Documentation Files:           4
+Dependencies Added:            1 (criterion)
+

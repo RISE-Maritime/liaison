@@ -41,6 +41,9 @@ tokio = { version = "1.35", features = ["full"] }
 # Platform-specific libraries (must be added to each crate individually)
 libloading = "0.8"
 
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
 [profile.release]
 lto = true
 codegen-units = 1

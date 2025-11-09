@@ -1,0 +1,30 @@
+# Profiling results
+results/
+!results/.gitkeep
+
+# Massif output files
+massif.out*
+*.massif
+
+# Heaptrack output
+heaptrack.*
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# CSV exports
+*.csv
+
+# Plot images (except examples)
+*.png
+!example_*.png
+
+# Temporary files
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

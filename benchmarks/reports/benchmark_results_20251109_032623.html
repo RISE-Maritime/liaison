@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liaison FMI Benchmark Results</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { margin: 0; color: #333; }
+        .meta { color: #666; margin-top: 10px; }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        .winner-rust { color: #28a745; font-weight: 600; }
+        .winner-cpp { color: #dc3545; font-weight: 600; }
+        .winner-tie { color: #6c757d; }
+        .positive { color: #dc3545; }
+        .negative { color: #28a745; }
+        .chart {
+            margin: 20px 0;
+            height: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Liaison FMI Benchmark Results</h1>
+        <div class="meta">
+            <strong>Generated:</strong> 2025-11-09 03:26:23<br>
+            <strong>Total Benchmarks:</strong> 20
+        </div>
+    </div>
+
+    <div class="section"><h2>Binary Size Benchmarks</h2><table><tr><th>Benchmark</th><th>C++</th><th>Rust</th><th>Difference</th><th>Winner</th></tr><tr><td>client_library</td><td>5.10 MB</td><td>13.00 MB</td><td class="positive">+154.9%</td><td class="winner-cpp">CPP</td></tr><tr><td>server_binary</td><td>8.20 MB</td><td>15.00 MB</td><td class="positive">+82.9%</td><td class="winner-cpp">CPP</td></tr></table></div><div class="section"><h2>Build Time Benchmarks</h2><table><tr><th>Benchmark</th><th>C++</th><th>Rust</th><th>Difference</th><th>Winner</th></tr><tr><td>clean_build</td><td>35.00 seconds</td><td>85.00 seconds</td><td class="positive">+142.9%</td><td class="winner-cpp">CPP</td></tr><tr><td>incremental_build</td><td>6.00 seconds</td><td>5.00 seconds</td><td class="negative">-16.7%</td><td class="winner-rust">RUST</td></tr></table></div><div class="section"><h2>Latency Benchmarks</h2><table><tr><th>Benchmark</th><th>C++</th><th>Rust</th><th>Difference</th><th>Winner</th></tr><tr><td>fmi3DoStep</td><td>145.00 µs</td><td>148.00 µs</td><td class="positive">+2.1%</td><td class="winner-cpp">CPP</td></tr><tr><td>fmi3EnterInitializationMode</td><td>156.00 µs</td><td>159.00 µs</td><td class="positive">+1.9%</td><td class="winner-cpp">CPP</td></tr><tr><td>fmi3FreeInstance</td><td>342.00 µs</td><td>348.00 µs</td><td class="positive">+1.8%</td><td class="winner-cpp">CPP</td></tr><tr><td>fmi3GetFloat64_1</td><td>132.00 µs</td><td>135.00 µs</td><td class="positive">+2.3%</td><td class="winner-cpp">CPP</td></tr><tr><td>fmi3GetFloat64_10</td><td>142.00 µs</td><td>145.00 µs</td><td class="positive">+2.1%</td><td class="winner-cpp">CPP</td></tr><tr><td>fmi3GetFloat64_100</td><td>287.00 µs</td><td>293.00 µs</td><td class="positive">+2.1%</td><td class="winner-cpp">CPP</td></tr><tr><td>fmi3GetVersion</td><td>118.00 µs</td><td>121.00 µs</td><td class="positive">+2.5%</td><td class="winner-cpp">CPP</td></tr><tr><td>fmi3InstantiateCoSimulation</td><td>1450.00 µs</td><td>1478.00 µs</td><td class="positive">+1.9%</td><td class="winner-cpp">CPP</td></tr><tr><td>fmi3SetDebugLogging</td><td>125.00 µs</td><td>128.00 µs</td><td class="positive">+2.4%</td><td class="winner-cpp">CPP</td></tr></table></div><div class="section"><h2>Memory Benchmarks</h2><table><tr><th>Benchmark</th><th>C++</th><th>Rust</th><th>Difference</th><th>Winner</th></tr><tr><td>server_10_instances</td><td>46.80 MB</td><td>47.20 MB</td><td class="positive">+0.9%</td><td class="winner-cpp">CPP</td></tr><tr><td>server_1_instance</td><td>15.30 MB</td><td>15.60 MB</td><td class="positive">+2.0%</td><td class="winner-cpp">CPP</td></tr><tr><td>server_idle</td><td>12.10 MB</td><td>12.40 MB</td><td class="positive">+2.5%</td><td class="winner-cpp">CPP</td></tr><tr><td>server_startup</td><td>8.20 MB</td><td>8.50 MB</td><td class="positive">+3.7%</td><td class="winner-cpp">CPP</td></tr></table></div><div class="section"><h2>Throughput Benchmarks</h2><table><tr><th>Benchmark</th><th>C++</th><th>Rust</th><th>Difference</th><th>Winner</th></tr><tr><td>DoStep_100ms</td><td>2953.00 ops/sec</td><td>2948.00 ops/sec</td><td class="negative">-0.2%</td><td class="winner-rust">RUST</td></tr><tr><td>DoStep_10ms</td><td>2921.00 ops/sec</td><td>2905.00 ops/sec</td><td class="negative">-0.5%</td><td class="winner-rust">RUST</td></tr><tr><td>DoStep_1ms</td><td>2847.00 ops/sec</td><td>2819.00 ops/sec</td><td class="negative">-1.0%</td><td class="winner-rust">RUST</td></tr></table></div>
+
+    <div class="section">
+        <h2>Summary Statistics</h2>
+        <table>
+            <tr>
+                <th>Metric Category</th>
+                <th>Average Difference (Rust vs C++)</th>
+            </tr>
+            <tr><td>Latency</td><td>+2.12%</td></tr><tr><td>Throughput</td><td>-0.57%</td></tr><tr><td>Memory</td><td>+2.24%</td></tr>
+        </table>
+    </div>
+</body>
+</html>

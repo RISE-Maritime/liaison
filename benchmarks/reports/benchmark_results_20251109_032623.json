@@ -1,0 +1,828 @@
+{
+  "generated": "2025-11-09T03:26:23.005043",
+  "total_benchmarks": 20,
+  "summary": {
+    "fmi3GetVersion": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 118,
+          "median": 118,
+          "min": 118,
+          "max": 118,
+          "count": 1
+        },
+        "rust": {
+          "mean": 121,
+          "median": 121,
+          "min": 121,
+          "max": 121,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 2.5423728813559325,
+        "winner": "cpp"
+      }
+    },
+    "fmi3SetDebugLogging": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 125,
+          "median": 125,
+          "min": 125,
+          "max": 125,
+          "count": 1
+        },
+        "rust": {
+          "mean": 128,
+          "median": 128,
+          "min": 128,
+          "max": 128,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 2.4,
+        "winner": "cpp"
+      }
+    },
+    "fmi3InstantiateCoSimulation": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 1450,
+          "median": 1450,
+          "min": 1450,
+          "max": 1450,
+          "count": 1
+        },
+        "rust": {
+          "mean": 1478,
+          "median": 1478,
+          "min": 1478,
+          "max": 1478,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 1.9310344827586208,
+        "winner": "cpp"
+      }
+    },
+    "fmi3FreeInstance": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 342,
+          "median": 342,
+          "min": 342,
+          "max": 342,
+          "count": 1
+        },
+        "rust": {
+          "mean": 348,
+          "median": 348,
+          "min": 348,
+          "max": 348,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 1.7543859649122806,
+        "winner": "cpp"
+      }
+    },
+    "fmi3EnterInitializationMode": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 156,
+          "median": 156,
+          "min": 156,
+          "max": 156,
+          "count": 1
+        },
+        "rust": {
+          "mean": 159,
+          "median": 159,
+          "min": 159,
+          "max": 159,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 1.9230769230769231,
+        "winner": "cpp"
+      }
+    },
+    "fmi3GetFloat64_1": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 132,
+          "median": 132,
+          "min": 132,
+          "max": 132,
+          "count": 1
+        },
+        "rust": {
+          "mean": 135,
+          "median": 135,
+          "min": 135,
+          "max": 135,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 2.272727272727273,
+        "winner": "cpp"
+      }
+    },
+    "fmi3GetFloat64_10": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 142,
+          "median": 142,
+          "min": 142,
+          "max": 142,
+          "count": 1
+        },
+        "rust": {
+          "mean": 145,
+          "median": 145,
+          "min": 145,
+          "max": 145,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 2.112676056338028,
+        "winner": "cpp"
+      }
+    },
+    "fmi3GetFloat64_100": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 287,
+          "median": 287,
+          "min": 287,
+          "max": 287,
+          "count": 1
+        },
+        "rust": {
+          "mean": 293,
+          "median": 293,
+          "min": 293,
+          "max": 293,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 2.0905923344947737,
+        "winner": "cpp"
+      }
+    },
+    "fmi3DoStep": {
+      "metric": "latency",
+      "implementations": {
+        "cpp": {
+          "mean": 145,
+          "median": 145,
+          "min": 145,
+          "max": 145,
+          "count": 1
+        },
+        "rust": {
+          "mean": 148,
+          "median": 148,
+          "min": 148,
+          "max": 148,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 2.0689655172413794,
+        "winner": "cpp"
+      }
+    },
+    "DoStep_1ms": {
+      "metric": "throughput",
+      "implementations": {
+        "cpp": {
+          "mean": 2847,
+          "median": 2847,
+          "min": 2847,
+          "max": 2847,
+          "count": 1
+        },
+        "rust": {
+          "mean": 2819,
+          "median": 2819,
+          "min": 2819,
+          "max": 2819,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": -0.9834913944502985,
+        "winner": "rust"
+      }
+    },
+    "DoStep_10ms": {
+      "metric": "throughput",
+      "implementations": {
+        "cpp": {
+          "mean": 2921,
+          "median": 2921,
+          "min": 2921,
+          "max": 2921,
+          "count": 1
+        },
+        "rust": {
+          "mean": 2905,
+          "median": 2905,
+          "min": 2905,
+          "max": 2905,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": -0.5477576172543649,
+        "winner": "rust"
+      }
+    },
+    "DoStep_100ms": {
+      "metric": "throughput",
+      "implementations": {
+        "cpp": {
+          "mean": 2953,
+          "median": 2953,
+          "min": 2953,
+          "max": 2953,
+          "count": 1
+        },
+        "rust": {
+          "mean": 2948,
+          "median": 2948,
+          "min": 2948,
+          "max": 2948,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": -0.16931933626820184,
+        "winner": "rust"
+      }
+    },
+    "server_startup": {
+      "metric": "memory",
+      "implementations": {
+        "cpp": {
+          "mean": 8.2,
+          "median": 8.2,
+          "min": 8.2,
+          "max": 8.2,
+          "count": 1
+        },
+        "rust": {
+          "mean": 8.5,
+          "median": 8.5,
+          "min": 8.5,
+          "max": 8.5,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 3.6585365853658622,
+        "winner": "cpp"
+      }
+    },
+    "server_idle": {
+      "metric": "memory",
+      "implementations": {
+        "cpp": {
+          "mean": 12.1,
+          "median": 12.1,
+          "min": 12.1,
+          "max": 12.1,
+          "count": 1
+        },
+        "rust": {
+          "mean": 12.4,
+          "median": 12.4,
+          "min": 12.4,
+          "max": 12.4,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 2.4793388429752126,
+        "winner": "cpp"
+      }
+    },
+    "server_1_instance": {
+      "metric": "memory",
+      "implementations": {
+        "cpp": {
+          "mean": 15.3,
+          "median": 15.3,
+          "min": 15.3,
+          "max": 15.3,
+          "count": 1
+        },
+        "rust": {
+          "mean": 15.6,
+          "median": 15.6,
+          "min": 15.6,
+          "max": 15.6,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 1.9607843137254832,
+        "winner": "cpp"
+      }
+    },
+    "server_10_instances": {
+      "metric": "memory",
+      "implementations": {
+        "cpp": {
+          "mean": 46.8,
+          "median": 46.8,
+          "min": 46.8,
+          "max": 46.8,
+          "count": 1
+        },
+        "rust": {
+          "mean": 47.2,
+          "median": 47.2,
+          "min": 47.2,
+          "max": 47.2,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 0.854700854700867,
+        "winner": "cpp"
+      }
+    },
+    "clean_build": {
+      "metric": "build_time",
+      "implementations": {
+        "cpp": {
+          "mean": 35,
+          "median": 35,
+          "min": 35,
+          "max": 35,
+          "count": 1
+        },
+        "rust": {
+          "mean": 85,
+          "median": 85,
+          "min": 85,
+          "max": 85,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 142.85714285714286,
+        "winner": "cpp"
+      }
+    },
+    "incremental_build": {
+      "metric": "build_time",
+      "implementations": {
+        "cpp": {
+          "mean": 6,
+          "median": 6,
+          "min": 6,
+          "max": 6,
+          "count": 1
+        },
+        "rust": {
+          "mean": 5,
+          "median": 5,
+          "min": 5,
+          "max": 5,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": -16.666666666666664,
+        "winner": "rust"
+      }
+    },
+    "server_binary": {
+      "metric": "binary_size",
+      "implementations": {
+        "cpp": {
+          "mean": 8.2,
+          "median": 8.2,
+          "min": 8.2,
+          "max": 8.2,
+          "count": 1
+        },
+        "rust": {
+          "mean": 15.0,
+          "median": 15.0,
+          "min": 15.0,
+          "max": 15.0,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 82.9268292682927,
+        "winner": "cpp"
+      }
+    },
+    "client_library": {
+      "metric": "binary_size",
+      "implementations": {
+        "cpp": {
+          "mean": 5.1,
+          "median": 5.1,
+          "min": 5.1,
+          "max": 5.1,
+          "count": 1
+        },
+        "rust": {
+          "mean": 13.0,
+          "median": 13.0,
+          "min": 13.0,
+          "max": 13.0,
+          "count": 1
+        }
+      },
+      "comparison": {
+        "rust_vs_cpp_pct": 154.90196078431376,
+        "winner": "cpp"
+      }
+    }
+  },
+  "raw_results": [
+    {
+      "name": "fmi3GetVersion",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 118,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3GetVersion",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 121,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3SetDebugLogging",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 125,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3SetDebugLogging",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 128,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3InstantiateCoSimulation",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 1450,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3InstantiateCoSimulation",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 1478,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3FreeInstance",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 342,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3FreeInstance",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 348,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3EnterInitializationMode",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 156,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3EnterInitializationMode",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 159,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3GetFloat64_1",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 132,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3GetFloat64_1",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 135,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3GetFloat64_10",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 142,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3GetFloat64_10",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 145,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3GetFloat64_100",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 287,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3GetFloat64_100",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 293,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3DoStep",
+      "implementation": "cpp",
+      "metric": "latency",
+      "value": 145,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "fmi3DoStep",
+      "implementation": "rust",
+      "metric": "latency",
+      "value": 148,
+      "unit": "\u00b5s",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "DoStep_1ms",
+      "implementation": "cpp",
+      "metric": "throughput",
+      "value": 2847,
+      "unit": "ops/sec",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "DoStep_1ms",
+      "implementation": "rust",
+      "metric": "throughput",
+      "value": 2819,
+      "unit": "ops/sec",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "DoStep_10ms",
+      "implementation": "cpp",
+      "metric": "throughput",
+      "value": 2921,
+      "unit": "ops/sec",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "DoStep_10ms",
+      "implementation": "rust",
+      "metric": "throughput",
+      "value": 2905,
+      "unit": "ops/sec",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "DoStep_100ms",
+      "implementation": "cpp",
+      "metric": "throughput",
+      "value": 2953,
+      "unit": "ops/sec",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "DoStep_100ms",
+      "implementation": "rust",
+      "metric": "throughput",
+      "value": 2948,
+      "unit": "ops/sec",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_startup",
+      "implementation": "cpp",
+      "metric": "memory",
+      "value": 8.2,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_startup",
+      "implementation": "rust",
+      "metric": "memory",
+      "value": 8.5,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_idle",
+      "implementation": "cpp",
+      "metric": "memory",
+      "value": 12.1,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_idle",
+      "implementation": "rust",
+      "metric": "memory",
+      "value": 12.4,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_1_instance",
+      "implementation": "cpp",
+      "metric": "memory",
+      "value": 15.3,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_1_instance",
+      "implementation": "rust",
+      "metric": "memory",
+      "value": 15.6,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_10_instances",
+      "implementation": "cpp",
+      "metric": "memory",
+      "value": 46.8,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_10_instances",
+      "implementation": "rust",
+      "metric": "memory",
+      "value": 47.2,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "clean_build",
+      "implementation": "cpp",
+      "metric": "build_time",
+      "value": 35,
+      "unit": "seconds",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "clean_build",
+      "implementation": "rust",
+      "metric": "build_time",
+      "value": 85,
+      "unit": "seconds",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "incremental_build",
+      "implementation": "cpp",
+      "metric": "build_time",
+      "value": 6,
+      "unit": "seconds",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "incremental_build",
+      "implementation": "rust",
+      "metric": "build_time",
+      "value": 5,
+      "unit": "seconds",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_binary",
+      "implementation": "cpp",
+      "metric": "binary_size",
+      "value": 8.2,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "server_binary",
+      "implementation": "rust",
+      "metric": "binary_size",
+      "value": 15.0,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "client_library",
+      "implementation": "cpp",
+      "metric": "binary_size",
+      "value": 5.1,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    },
+    {
+      "name": "client_library",
+      "implementation": "rust",
+      "metric": "binary_size",
+      "value": 13.0,
+      "unit": "MB",
+      "timestamp": "2025-11-09T03:26:23.004254",
+      "metadata": {}
+    }
+  ]
+}

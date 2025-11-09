@@ -1,0 +1,66 @@
+# Example Benchmark Configuration
+# Copy this file to benchmark_config.toml and customize as needed
+
+[general]
+# FMU file to test (can be overridden by command line)
+fmu_path = "./BouncingBallLiaison.fmu"
+
+# Zenoh responder ID (must match server configuration)
+responder_id = "test_responder"
+
+# Output directory for results
+output_dir = "./results"
+
+[latency]
+# Number of measurement iterations
+iterations = 100
+
+# Number of warmup iterations
+warmup_iterations = 10
+
+# Test categories to run (empty = all)
+# Options: lifecycle, data, simulation
+test_categories = []
+
+# Output format: human, csv, json
+output_format = "csv"
+
+[throughput]
+# Test duration in seconds
+duration_secs = 10
+
+# Maximum number of concurrent clients
+max_clients = 16
+
+# Test categories to run (empty = all)
+# Options: rps, concurrent, transfer, sustained
+test_categories = []
+
+# Output format: human, csv, json
+output_format = "csv"
+
+[comparison]
+# Enable C++ benchmarks (if available)
+enable_cpp = true
+
+# Enable Rust benchmarks
+enable_rust = true
+
+# Generate comparison report
+generate_report = true
+
+# Generate comparison visualizations (requires matplotlib)
+generate_plots = false
+
+[system]
+# CPU governor preference (performance, powersave)
+cpu_governor = "performance"
+
+# Network interface for benchmarking (default: localhost)
+network_interface = "lo"
+
+# Zenoh configuration file (optional)
+zenoh_config = ""
+
+# Enable system resource monitoring
+monitor_resources = false

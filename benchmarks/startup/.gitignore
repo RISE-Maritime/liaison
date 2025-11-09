@@ -1,0 +1,17 @@
+# Compiled benchmark binaries
+startup_bench
+init_bench
+
+# Benchmark results
+startup_results.json
+init_results.json
+binary_analysis_report.txt
+benchmark_results_*/
+
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Temporary files
+*.tmp
+*.log

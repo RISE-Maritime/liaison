@@ -1,0 +1,24 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Benchmark results
+results/
+*.csv
+*.json
+*_results.*
+
+# Generated files
+*.log
+*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
