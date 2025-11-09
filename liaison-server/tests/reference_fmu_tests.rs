@@ -525,7 +525,7 @@ fn test_multiple_fmu_creation() -> Result<()> {
     fixture.setup_binaries()?;
 
     // Test with multiple reference FMUs if available
-    let reference_fmus = vec!["BouncingBall.fmu", "BouncingBallPython.fmu"];
+    let reference_fmus = ["BouncingBall.fmu", "BouncingBallPython.fmu"];
 
     for (idx, fmu_name) in reference_fmus.iter().enumerate() {
         let source_fmu = fixture.get_reference_fmu(fmu_name);

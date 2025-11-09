@@ -67,13 +67,13 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 
 ### Phase 7: Build System & Documentation
 - [x] 7.1 Set up GitHub Actions for CI/CD - COMPLETED
-- [ ] 7.2 Update README with Rust build instructions
+- [x] 7.2 Update README with Rust build instructions - COMPLETED
 - [ ] 7.3 Create migration guide
 
 ## Current Status
 **Phase:** 7 - Build System & Documentation (IN PROGRESS)
-**Last Updated:** 2025-11-09 (GitHub Actions CI/CD completed)
-**Next Step:** Phase 7.2 - Update README with Rust build instructions
+**Last Updated:** 2025-11-09 (README updated with Rust build instructions)
+**Next Step:** Phase 7.3 - Create migration guide
 
 ## Completed Work
 
@@ -300,7 +300,7 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
   - Both compile with zero errors
   - Manual testing confirms FMU creation works correctly
 
-### Phase 7 Achievements
+### Phase 7 Achievements (Part 1: CI/CD - Completed)
 - **GitHub Actions CI/CD** (`.github/workflows/rust-ci.yml`): Comprehensive automated build and test pipeline:
   - **Check Job**: Runs on every push and PR
     - Code formatting validation with `cargo fmt --check`
@@ -337,6 +337,32 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
   - All clippy warnings treated as errors (with necessary FMI exceptions)
   - Tests must pass on both Linux and Windows before merging
   - Automated release artifact generation
+
+### Phase 7 Achievements (Part 2: Documentation - Completed)
+- **README.md Updates**: Comprehensive Rust build documentation added:
+  - **Rust Implementation Notice**: Added informational banner at the top highlighting the port from C++ to Rust
+  - **Building from Source Section**: Complete guide for building both crates
+    - Prerequisites: Rust toolchain (1.70+), Protocol Buffers compiler (protoc), C compiler
+    - Platform-specific installation instructions for Ubuntu/Debian, macOS, and Windows
+    - Debug build instructions with output locations
+    - Release build instructions with LTO optimization notes
+  - **Testing Section**: Full testing guide
+    - Running full test suite (280+ tests)
+    - Running tests with output
+    - Running tests for specific crates
+  - **Linting Section**: Code quality checks
+    - Clippy usage for static analysis
+    - Formatting checks with cargo fmt
+  - **Usage Examples**: Updated all command examples to use `liaison-server` binary name
+    - Serving FMUs: `./target/release/liaison-server serve`
+    - Creating Liaison FMUs: `./target/release/liaison-server make-fmu`
+    - With Zenoh configuration
+    - With debug logging
+  - **Updated Prerequisites**: Added link to building from source
+  - **Fixed Typos**: Corrected "debbuging" to "debugging", "Liasion" to "Liaison"
+  - **Development Section**: Updated to reference Rust build commands
+- **Code Quality**: Fixed clippy warning in test file (useless_vec)
+- **Verification**: All tests pass (280+ tests), all clippy checks pass
 
 ## Notes
 - Maintain C ABI compatibility for the client library (cdylib)

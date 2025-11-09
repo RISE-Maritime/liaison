@@ -2,6 +2,8 @@
 
 > :warning: **Currently in development!**
 
+> :information_source: **Rust Implementation**: Liaison has been ported from C++ to Rust for improved memory safety, performance, and maintainability. The Rust version is fully compatible with the original C++ implementation.
+
 Liaison is an open-source tool designed to simplify the sharing of Functional Mock-up Units (FMUs) both within and between organizations. It addresses two specific challenges:
 
 1. Platform and environment compatibility — when an FMU cannot be easily packaged to run across different operating systems (e.g. Linux, Windows) or when the target environment lacks required dependencies (e.g., MATLAB runtime).
@@ -21,10 +23,10 @@ Liaison is inspired on [FMU-proxy](https://github.com/NTNU-IHB/FMU-proxy). The m
 
 To get started with Liaison, follow these steps:
 
-**Prerequesites**
+**Prerequisites**
 
-- Download the latest [release](https://github.com/RISE-Maritime/liaison/releases).
-- Install [FMPy](https://fmpy.readthedocs.io/en/latest/install/) in your Python environment.  
+- Download the latest [release](https://github.com/RISE-Maritime/liaison/releases), or [build from source](#building-from-source).
+- Install [FMPy](https://fmpy.readthedocs.io/en/latest/install/) in your Python environment.
   _Note: FMPy is not a required dependency for Liaison; it is only used for testing._
 - Get an FMU according to FMI 3.0. You can use one of the reference FMUs [provided by Modelica](https://github.com/modelica/Reference-FMUs). We recommend `BouncingBall`.
 
@@ -33,7 +35,7 @@ To get started with Liaison, follow these steps:
 Use the following command to create a Liaison FMU.
 
 ```bash
-./liaison --make-fmu ./BouncingBall.fmu fmus/bouncingball
+./liaison-server make-fmu ./BouncingBall.fmu fmus/bouncingball
 ```
 
 The result will be an FMU named `BouncingBallLiaison.fmu`. Unlike the original FMU, this Liaison FMU does not include the original logic but retains the model description. It acts as a client, making all FMI function calls to the FMU being served at `fmus/bouncingball`.
@@ -43,7 +45,7 @@ The result will be an FMU named `BouncingBallLiaison.fmu`. Unlike the original F
 Start serving the original FMU at `fmus/bouncingball` with the command:
 
 ```bash
-./liaison --serve ../tests/BouncingBall.fmu fmus/bouncingball
+./liaison-server serve ../tests/BouncingBall.fmu fmus/bouncingball
 ```
 
 **Step 3: Use the "Liaison FMU" in a simulation**
@@ -60,14 +62,14 @@ With this setup, FMPy will simulate the FMU as if it were the original, but the 
 
 ### Zenoh configuration
 
-The flag `--zenoh-config` can be used to provide a [Zenoh configuration JSON file](https://zenoh.io/docs/manual/configuration/#configuration-files) so that the Liasion FMU and the Liasion server connects to a Zenoh router.
+The flag `--zenoh-config` can be used to provide a [Zenoh configuration JSON file](https://zenoh.io/docs/manual/configuration/#configuration-files) so that the Liaison FMU and the Liaison server connects to a Zenoh router.
 
 ```bash
-./liaison --make-fmu ../BouncingBall.fmu fmus/bouncingball --zenoh-config ../config.json
+./liaison-server make-fmu ../BouncingBall.fmu fmus/bouncingball --zenoh-config ../config.json
 ```
 
 ```bash
-./liaison --serve ../BouncingBall.fmu fmus/bouncingball --zenoh-config ../config.json
+./liaison-server serve ../BouncingBall.fmu fmus/bouncingball --zenoh-config ../config.json
 ```
 
 The following is an example of Zenoh configuration JSON file using TLS. Liaison will look for the certificates (i.e `*.pem` files) in the locations specified in the configuration file.
@@ -96,10 +98,10 @@ The following is an example of Zenoh configuration JSON file using TLS. Liaison 
 
 ### Debug
 
-The flag `--debug` can be used so that the output is extra verbose to facilitate debbuging.
+The flag `--debug` can be used so that the output is extra verbose to facilitate debugging.
 
 ```bash
-./liaison --serve ./tests/BouncingBall.fmu fmus/bouncingball --debug
+./liaison-server serve ./tests/BouncingBall.fmu fmus/bouncingball --debug
 ```
 
 ### Python FMUs
@@ -112,14 +114,114 @@ Conda
 
 ```bash
 conda create -n bb
-./liaison --serve <Python-based FMU> <responderId> --python-env /home/user/miniconda3/envs/bb
+./liaison-server serve <Python-based FMU> <responderId> --python-env /home/user/miniconda3/envs/bb
 ```
 
 venv
 
 ```bash
 python -m venv bb
-./liaison --serve <Python-based FMU> <responderId> --python-env ./bb
+./liaison-server serve <Python-based FMU> <responderId> --python-env ./bb
+```
+
+## Building from Source
+
+Liaison is implemented in Rust and consists of two main components:
+
+1. **liaison-server** - The server binary that serves FMUs over Zenoh
+2. **liaison-fmi** - The client library (shared library) that implements FMI 3.0 functions
+
+### Prerequisites
+
+- **Rust toolchain** (1.70 or later) - Install from [rustup.rs](https://rustup.rs/)
+- **Protocol Buffers compiler** (protoc) - Required for building protobuf definitions
+  - Ubuntu/Debian: `sudo apt-get install protobuf-compiler`
+  - macOS: `brew install protobuf`
+  - Windows: Download from [protobuf releases](https://github.com/protocolbuffers/protobuf/releases)
+- **C compiler** - Required for linking
+  - Ubuntu/Debian: `sudo apt-get install build-essential`
+  - macOS: Install Xcode Command Line Tools
+  - Windows: Install Visual Studio with C++ support
+
+### Building
+
+#### Debug Build
+
+Build both the server and client library in debug mode:
+
+```bash
+cargo build
+```
+
+This will create:
+- `target/debug/liaison-server` - Server executable
+- `target/debug/libliaisonfmu.so` (Linux) or `target/debug/liaisonfmu.dll` (Windows) - Client library
+
+#### Release Build
+
+For optimized production builds:
+
+```bash
+cargo build --release
+```
+
+This will create:
+- `target/release/liaison-server` - Optimized server executable
+- `target/release/libliaisonfmu.so` (Linux) or `target/release/liaisonfmu.dll` (Windows) - Optimized client library
+
+The release build uses Link-Time Optimization (LTO) and is significantly smaller and faster.
+
+### Testing
+
+Run the full test suite (280+ tests):
+
+```bash
+cargo test
+```
+
+Run tests with output:
+
+```bash
+cargo test -- --nocapture
+```
+
+Run tests for a specific crate:
+
+```bash
+cargo test -p liaison-server
+cargo test -p liaison-fmi
+```
+
+### Linting
+
+Check code quality with Clippy:
+
+```bash
+cargo clippy --all-targets --all-features
+```
+
+Check code formatting:
+
+```bash
+cargo fmt --check
+```
+
+### Using the Built Binaries
+
+After building, you can use the Rust version of Liaison:
+
+```bash
+# Serve an FMU
+./target/release/liaison-server serve ./BouncingBall.fmu fmus/bouncingball
+
+# Create a Liaison FMU
+./target/release/liaison-server make-fmu ./BouncingBall.fmu fmus/bouncingball
+
+# With Zenoh configuration
+./target/release/liaison-server serve ./BouncingBall.fmu fmus/bouncingball --zenoh-config ./config.json
+
+# With debug logging
+./target/release/liaison-server serve ./BouncingBall.fmu fmus/bouncingball --debug
 ```
 
 ## Development
@@ -129,7 +231,7 @@ This repository contains the necessary files for developing Liaison smoothly in 
 1. Clone the repository.
 2. Open it in VSCode.
 3. Reopen the repository in a DevContainer.
-4. Build the targets.
+4. Build the targets with `cargo build`.
 
 ## Current functionality
 
