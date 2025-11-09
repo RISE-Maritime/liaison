@@ -10,7 +10,7 @@ name = "liaison_server"
 path = "src/lib.rs"
 
 [[bin]]
-name = "liaison"
+name = "liaison-server"
 path = "src/main.rs"
 
 [dependencies]

@@ -72,10 +72,18 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 
 ## Current Status
 **Phase:** ALL PHASES COMPLETED AND VERIFIED + ZENOH LOG PUBLISHING IMPLEMENTED
-**Last Updated:** 2025-11-09 (Zenoh log message publishing completed)
+**Last Updated:** 2025-11-09 (Binary naming consistency fixed)
 **Next Step:** None - All implementation phases complete
 
-### Latest Update (2025-11-09 - Zenoh Log Publishing)
+### Latest Update (2025-11-09 - Binary Naming Consistency)
+- ✅ Fixed binary name inconsistency in Cargo.toml
+- ✅ Binary renamed from "liaison" to "liaison-server" for consistency with documentation
+- ✅ All 290 tests passing (63 liaison-fmi unit tests, 8 liaison-fmi doc tests, 41 liaison-fmi integration tests, 128 liaison-server unit tests, 10 FMU loading tests, 27 server integration tests, 10 reference FMU tests, 3 liaison-server doc tests)
+- ✅ 17 tests marked as ignored (6 liaison-server unit tests, 2 server integration tests, 9 doc tests)
+- ✅ Cargo clippy passes with zero warnings
+- ✅ Release build successful (liaison-server binary, libliaisonfmu.so)
+
+### Previous Update (2025-11-09 - Zenoh Log Publishing)
 - ✅ Implemented Zenoh log message publishing in callbacks
 - ✅ Updated CallbackContext to hold Arc<Publisher<'static>>
 - ✅ Modified all three instantiation handlers to create and pass CallbackContext
