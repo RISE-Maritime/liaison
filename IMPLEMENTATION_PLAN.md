@@ -82,8 +82,8 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - ✅ Integrated log publisher from server into instantiation handlers
 - ✅ Created protobuf LogMessage in fmi3_log_message callback
 - ✅ Log messages now published via Zenoh to rpc/{responderId}/fmi3LogMessage
-- ✅ All 286 tests passing (63 liaison-fmi unit tests, 8 liaison-fmi doc tests, 41 liaison-fmi integration tests, 128 liaison-server unit tests, 10 FMU loading tests, 27 server integration tests, 10 reference FMU tests)
-- ✅ 8 tests marked as ignored (require actual FMU binaries or mock setups)
+- ✅ All 290 tests passing (63 liaison-fmi unit tests, 8 liaison-fmi doc tests, 41 liaison-fmi integration tests, 128 liaison-server unit tests, 10 FMU loading tests, 27 server integration tests, 10 reference FMU tests, 3 liaison-server doc tests)
+- ✅ 17 tests marked as ignored (6 liaison-server unit tests, 2 server integration tests, 9 doc tests - require actual FMU binaries or mock setups)
 - ✅ Cargo clippy passes with zero warnings (only dependency future-compat note)
 - ✅ Release build successful (liaison-server binary, libliaisonfmu.so)
 - ✅ Debug build successful
