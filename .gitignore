@@ -4,3 +4,4 @@ tests/config.json
 examples/target/
 Cargo.lock
 target/
+venv
