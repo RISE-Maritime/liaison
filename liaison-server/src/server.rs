@@ -140,7 +140,7 @@ pub fn start_server(
     let log_message_key = format!("rpc/{}/fmi3LogMessage", responder_id);
     let log_publisher = Arc::new(
         session
-            .declare_publisher(&log_message_key)
+            .declare_publisher(log_message_key.clone())
             .wait()
             .map_err(|e| anyhow::anyhow!("Failed to declare log message publisher: {:?}", e))?,
     );
@@ -163,8 +163,9 @@ pub fn start_server(
     let fmu_clone = Arc::clone(&fmu);
     let instance_manager_clone = Arc::clone(&instance_manager);
     let resource_path_clone = resource_path.clone();
+    let log_publisher_clone = Arc::clone(&log_publisher);
 
-    // Helper macro to declare queryables
+    // Helper macro to declare queryables (4 parameter handlers - most handlers)
     macro_rules! declare_queryable {
         ($func_name:expr, $handler:expr) => {{
             let key = format!("rpc/{}/{}", responder_id, $func_name);
@@ -191,23 +192,55 @@ pub fn start_server(
         }};
     }
 
+    // Helper macro for instantiation handlers (5 parameters - includes log_publisher)
+    macro_rules! declare_instantiation_queryable {
+        ($func_name:expr, $handler:expr) => {{
+            let key = format!("rpc/{}/{}", responder_id, $func_name);
+            let fmu = Arc::clone(&fmu_clone);
+            let instance_manager = Arc::clone(&instance_manager_clone);
+            let resource_path = resource_path_clone.clone();
+            let log_pub = Arc::clone(&log_publisher_clone);
+
+            let queryable = session
+                .declare_queryable(&key)
+                .callback(move |query| {
+                    if let Err(e) = $handler(
+                        query,
+                        &fmu,
+                        Arc::clone(&instance_manager),
+                        &resource_path,
+                        Arc::clone(&log_pub),
+                    ) {
+                        error!("Error handling {}: {:?}", $func_name, e);
+                    }
+                })
+                .wait()
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to declare queryable for {}: {:?}", $func_name, e)
+                })?;
+
+            debug!("Declared queryable: {}", key);
+            queryable
+        }};
+    }
+
     // Declare all queryables (based on liaison.cpp lines 832-870)
     let _queryable_set_debug_logging = declare_queryable!(
         "fmi3SetDebugLogging",
         queryable_handlers::handle_set_debug_logging
     );
 
-    let _queryable_instantiate_co_simulation = declare_queryable!(
+    let _queryable_instantiate_co_simulation = declare_instantiation_queryable!(
         "fmi3InstantiateCoSimulation",
         queryable_handlers::handle_instantiate_co_simulation
     );
 
-    let _queryable_instantiate_model_exchange = declare_queryable!(
+    let _queryable_instantiate_model_exchange = declare_instantiation_queryable!(
         "fmi3InstantiateModelExchange",
         queryable_handlers::handle_instantiate_model_exchange
     );
 
-    let _queryable_instantiate_scheduled_execution = declare_queryable!(
+    let _queryable_instantiate_scheduled_execution = declare_instantiation_queryable!(
         "fmi3InstantiateScheduledExecution",
         queryable_handlers::handle_instantiate_scheduled_execution
     );

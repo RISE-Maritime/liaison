@@ -22,9 +22,23 @@ use std::ffi::{c_void, CString};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zenoh::Wait;
+
+// ============================================================================
+// Test Helper Functions
+// ============================================================================
+
+fn create_test_publisher() -> Arc<zenoh::pubsub::Publisher<'static>> {
+    let config = zenoh::Config::default();
+    let session = zenoh::open(config).wait().unwrap();
+    let publisher = session.declare_publisher("test/log").wait().unwrap();
+    let _ = Box::leak(Box::new(session));
+    Arc::new(publisher)
+}
 
 // ============================================================================
 // InstanceManager Tests
@@ -455,14 +469,14 @@ fn test_make_fmu_with_zenoh_config() {
 
 #[test]
 fn test_callback_context_creation() {
-    let ctx = CallbackContext::new();
+    let ctx = CallbackContext::new(create_test_publisher());
     // Verify it can be created without errors
     let _ = ctx;
 }
 
 #[test]
 fn test_callback_context_default() {
-    let ctx = CallbackContext::default();
+    let ctx = CallbackContext::new(create_test_publisher());
     let _ = ctx;
 }
 

@@ -6,9 +6,13 @@
 #![allow(non_snake_case)]
 
 use crate::fmu_loader::fmi3Status;
-use crate::proto::Status as ProtoStatus;
+use crate::proto::{self, Status as ProtoStatus};
+use prost::Message;
 use std::ffi::{c_char, c_void, CStr};
+use std::sync::Arc;
 use tracing::{error, info, warn};
+use zenoh::pubsub::Publisher;
+use zenoh::Wait;
 
 // FMI 3.0 types (matching liaison-fmi definitions)
 type fmi3InstanceEnvironment = *mut c_void;
@@ -21,29 +25,24 @@ type fmi3String = *const fmi3Char;
 /// - Publish log messages to the Zenoh network
 /// - Track instance-specific state
 pub struct CallbackContext {
-    /// TODO: Add Zenoh publisher for log messages once server implementation is complete
-    /// This will be used to publish log messages received from the FMU to interested clients
-    _log_publisher: (),
+    /// Zenoh publisher for log messages
+    /// This is used to publish log messages received from the FMU to interested clients
+    pub log_publisher: Arc<Publisher<'static>>,
 }
 
 impl CallbackContext {
     /// Create a new callback context
     ///
     /// # Arguments
-    /// * `log_publisher` - TODO: Will be a Zenoh publisher for log messages
+    /// * `log_publisher` - Zenoh publisher for log messages
     ///
     /// # Returns
     /// A new CallbackContext instance
-    pub fn new() -> Self {
-        CallbackContext { _log_publisher: () }
+    pub fn new(log_publisher: Arc<Publisher<'static>>) -> Self {
+        CallbackContext { log_publisher }
     }
 }
 
-impl Default for CallbackContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 /// FMI 3.0 logMessage callback function
 ///
@@ -103,25 +102,29 @@ pub unsafe extern "C" fn fmi3_log_message(
     }
 
     // Publish log message to Zenoh
-    // TODO: Implement Zenoh publishing once server is integrated
-    // The implementation should:
-    // 1. Get the CallbackContext from instance_environment if not null
-    // 2. Create a proto::LogMessage with status, category, and message
-    // 3. Serialize the message and publish it via Zenoh publisher
-    //
-    // Example pseudo-code:
-    // if !instance_environment.is_null() {
-    //     let ctx = unsafe { &*(instance_environment as *const CallbackContext) };
-    //     let log_msg = proto::LogMessage {
-    //         status: ProtoStatus::from(status) as i32,
-    //         category: category_str,
-    //         message: message_str,
-    //     };
-    //     // Serialize and publish via ctx.log_publisher
-    // }
+    if !instance_environment.is_null() {
+        // Get the CallbackContext from instance_environment
+        let ctx = unsafe { &*(instance_environment as *const CallbackContext) };
 
-    // Suppress unused variable warning for now
-    let _ = instance_environment;
+        // Create proto::LogMessage
+        let log_msg = proto::LogMessage {
+            status: status_to_proto(status) as i32,
+            category: category_str.clone(),
+            message: message_str.clone(),
+        };
+
+        // Serialize the message
+        let mut buf = Vec::new();
+        if let Err(e) = log_msg.encode(&mut buf) {
+            error!("Failed to encode log message: {:?}", e);
+            return;
+        }
+
+        // Publish via Zenoh
+        if let Err(e) = ctx.log_publisher.put(buf).wait() {
+            error!("Failed to publish log message: {:?}", e);
+        }
+    }
 }
 
 /// Helper function to convert fmi3Status to protobuf Status
@@ -148,18 +151,29 @@ mod tests {
     use super::*;
     use std::ffi::CString;
 
+    // Helper function to create a test publisher
+    fn create_test_publisher() -> Arc<Publisher<'static>> {
+        // Create a default Zenoh config
+        let config = zenoh::Config::default();
+        // Open a session
+        let session = zenoh::open(config).wait().unwrap();
+        // Declare a test publisher
+        let publisher = session
+            .declare_publisher("test/log")
+            .wait()
+            .unwrap();
+        // Leak the session to make it 'static (OK for tests)
+        let _ = Box::leak(Box::new(session));
+        Arc::new(publisher)
+    }
+
     // Tests for CallbackContext
 
     #[test]
     fn test_callback_context_creation() {
-        let ctx = CallbackContext::new();
+        let publisher = create_test_publisher();
+        let ctx = CallbackContext::new(publisher);
         // Just verify we can create the context
-        let _ = ctx;
-    }
-
-    #[test]
-    fn test_callback_context_default() {
-        let ctx = CallbackContext::default();
         let _ = ctx;
     }
 
@@ -491,7 +505,8 @@ mod tests {
     #[test]
     fn test_fmi3_log_message_with_callback_context() {
         // Test with a valid callback context pointer
-        let ctx = CallbackContext::new();
+        let publisher = create_test_publisher();
+        let ctx = CallbackContext::new(publisher);
         let ctx_ptr = &ctx as *const CallbackContext as *mut c_void;
 
         let category = CString::new("test_category").unwrap();
@@ -506,8 +521,7 @@ mod tests {
             );
         }
 
-        // Currently the callback doesn't use the context, but this tests
-        // that passing a valid pointer doesn't cause issues
+        // Test that passing a valid pointer and publishing works
     }
 
     #[test]

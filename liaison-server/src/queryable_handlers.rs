@@ -38,7 +38,7 @@
 //! - ExitInitializationMode: lines 463-472
 //! - FreeInstance: lines 475-495
 
-use crate::callbacks::{fmi3_log_message, status_to_proto};
+use crate::callbacks::{fmi3_log_message, status_to_proto, CallbackContext};
 use crate::fmu_loader::FmuLibrary;
 #[cfg(test)]
 use crate::fmu_loader::fmi3Status;
@@ -49,6 +49,7 @@ use prost::Message;
 use std::ffi::CString;
 use std::sync::Arc;
 use tracing::{debug, error, info};
+use zenoh::pubsub::Publisher;
 use zenoh::query::Query;
 use zenoh::Wait;
 
@@ -231,11 +232,13 @@ pub fn handle_set_debug_logging(
 /// * `fmu` - Reference to the loaded FMU library
 /// * `instance_manager` - Thread-safe instance manager
 /// * `resource_path` - Path to FMU resources directory
+/// * `log_publisher` - Zenoh publisher for log messages
 pub fn handle_instantiate_co_simulation(
     query: Query,
     fmu: &FmuLibrary,
     instance_manager: Arc<InstanceManager>,
     resource_path: &str,
+    log_publisher: Arc<Publisher<'static>>,
 ) -> Result<()> {
     debug!("Handling fmi3InstantiateCoSimulation query");
 
@@ -256,6 +259,10 @@ pub fn handle_instantiate_co_simulation(
         .map(|&x| x as u32)
         .collect();
 
+    // Create callback context with log publisher
+    let callback_context = Box::new(CallbackContext::new(log_publisher));
+    let callback_context_ptr = Box::into_raw(callback_context) as *mut std::ffi::c_void;
+
     // Call FMU function
     let instance = (fmu.fmi3_instantiate_co_simulation)(
         instance_name.as_ptr(),
@@ -267,7 +274,7 @@ pub fn handle_instantiate_co_simulation(
         input.early_return_allowed as i32,
         required_intermediate_variables.as_ptr(),
         input.n_required_intermediate_variables as usize,
-        std::ptr::null_mut(),   // instance_environment
+        callback_context_ptr,   // instance_environment
         Some(fmi3_log_message), // log_message callback
         None,                   // intermediate_update callback
     );
@@ -298,6 +305,14 @@ pub fn handle_instantiate_co_simulation(
 ///
 /// Instantiates a new FMU instance for Model Exchange.
 ///
+/// # Parameters
+///
+/// * `query` - The Zenoh query containing the instantiation request
+/// * `fmu` - Reference to the FMU library
+/// * `instance_manager` - Manager for FMU instances
+/// * `resource_path` - Path to FMU resources
+/// * `log_publisher` - Zenoh publisher for FMU log messages
+///
 /// # Implementation Notes
 ///
 /// Based on C++ implementation in liaison.cpp lines 382-404:
@@ -326,6 +341,7 @@ pub fn handle_instantiate_model_exchange(
     fmu: &FmuLibrary,
     instance_manager: Arc<InstanceManager>,
     resource_path: &str,
+    log_publisher: Arc<Publisher<'static>>,
 ) -> Result<()> {
     debug!("Handling fmi3InstantiateModelExchange query");
 
@@ -339,6 +355,10 @@ pub fn handle_instantiate_model_exchange(
         .context("Failed to convert instantiation_token")?;
     let resource_path_c = CString::new(resource_path).context("Failed to convert resource_path")?;
 
+    // Create callback context with log publisher
+    let callback_context = Box::new(CallbackContext::new(log_publisher));
+    let callback_context_ptr = Box::into_raw(callback_context) as *mut std::ffi::c_void;
+
     // Call FMU function
     let instance = (fmu.fmi3_instantiate_model_exchange)(
         instance_name.as_ptr(),
@@ -346,7 +366,7 @@ pub fn handle_instantiate_model_exchange(
         resource_path_c.as_ptr(),
         input.visible as i32,
         input.logging_on as i32,
-        std::ptr::null_mut(),   // instance_environment
+        callback_context_ptr,   // instance_environment
         Some(fmi3_log_message), // log_message callback
     );
 
@@ -375,6 +395,14 @@ pub fn handle_instantiate_model_exchange(
 /// Handler for fmi3InstantiateScheduledExecution
 ///
 /// Instantiates a new FMU instance for Scheduled Execution.
+///
+/// # Parameters
+///
+/// * `query` - The Zenoh query containing the instantiation request
+/// * `fmu` - Reference to the FMU library
+/// * `instance_manager` - Manager for FMU instances
+/// * `resource_path` - Path to FMU resources
+/// * `log_publisher` - Zenoh publisher for FMU log messages
 ///
 /// # Implementation Notes
 ///
@@ -407,6 +435,7 @@ pub fn handle_instantiate_scheduled_execution(
     fmu: &FmuLibrary,
     instance_manager: Arc<InstanceManager>,
     resource_path: &str,
+    log_publisher: Arc<Publisher<'static>>,
 ) -> Result<()> {
     debug!("Handling fmi3InstantiateScheduledExecution query");
 
@@ -420,6 +449,10 @@ pub fn handle_instantiate_scheduled_execution(
         .context("Failed to convert instantiation_token")?;
     let resource_path_c = CString::new(resource_path).context("Failed to convert resource_path")?;
 
+    // Create callback context with log publisher
+    let callback_context = Box::new(CallbackContext::new(log_publisher));
+    let callback_context_ptr = Box::into_raw(callback_context) as *mut std::ffi::c_void;
+
     // Call FMU function
     let instance = (fmu.fmi3_instantiate_scheduled_execution)(
         instance_name.as_ptr(),
@@ -427,7 +460,7 @@ pub fn handle_instantiate_scheduled_execution(
         resource_path_c.as_ptr(),
         input.visible as i32,
         input.logging_on as i32,
-        std::ptr::null_mut(),   // instance_environment
+        callback_context_ptr,   // instance_environment
         Some(fmi3_log_message), // log_message callback
         None,                   // clock_update callback
         None,                   // lock_preemption callback

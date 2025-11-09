@@ -71,16 +71,24 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - [x] 7.3 Create migration guide - COMPLETED
 
 ## Current Status
-**Phase:** ALL PHASES COMPLETED AND VERIFIED
-**Last Updated:** 2025-11-09 (Final verification passed)
+**Phase:** ALL PHASES COMPLETED AND VERIFIED + ZENOH LOG PUBLISHING IMPLEMENTED
+**Last Updated:** 2025-11-09 (Zenoh log message publishing completed)
 **Next Step:** None - All implementation phases complete
 
-### Final Verification (2025-11-09)
-- ✅ All 288 tests passing (63 liaison-fmi unit tests, 8 liaison-fmi doc tests, 41 liaison-fmi integration tests, 129 liaison-server unit tests, 10 FMU loading tests, 27 server integration tests, 10 reference FMU tests)
+### Latest Update (2025-11-09 - Zenoh Log Publishing)
+- ✅ Implemented Zenoh log message publishing in callbacks
+- ✅ Updated CallbackContext to hold Arc<Publisher<'static>>
+- ✅ Modified all three instantiation handlers to create and pass CallbackContext
+- ✅ Integrated log publisher from server into instantiation handlers
+- ✅ Created protobuf LogMessage in fmi3_log_message callback
+- ✅ Log messages now published via Zenoh to rpc/{responderId}/fmi3LogMessage
+- ✅ All 286 tests passing (63 liaison-fmi unit tests, 8 liaison-fmi doc tests, 41 liaison-fmi integration tests, 128 liaison-server unit tests, 10 FMU loading tests, 27 server integration tests, 10 reference FMU tests)
 - ✅ 8 tests marked as ignored (require actual FMU binaries or mock setups)
 - ✅ Cargo clippy passes with zero warnings (only dependency future-compat note)
 - ✅ Release build successful (liaison-server binary, libliaisonfmu.so)
 - ✅ Debug build successful
+
+### Final Verification (2025-11-09)
 - ✅ All code compiles cleanly on Linux x86_64
 - ✅ Protobuf generation working correctly
 - ✅ Repository is clean and ready for production use
@@ -180,7 +188,14 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - **Linting**: Passes cargo clippy with allowed exceptions for FMI C API compatibility
 - **Tests**: All existing tests pass (6 tests)
 
-### Phase 5 Achievements
+### Phase 5 Achievements (Enhanced 2025-11-09)
+- **Zenoh Log Message Publishing**: Fully implemented FMU log message publishing
+  - CallbackContext now holds Arc<Publisher<'static>> for log publishing
+  - All instantiation handlers (CoSimulation, ModelExchange, ScheduledExecution) create CallbackContext
+  - Callback context passed as instance_environment to FMU instances
+  - fmi3_log_message callback publishes proto::LogMessage via Zenoh
+  - Log messages serialized with prost and published to rpc/{responderId}/fmi3LogMessage
+  - Thread-safe publisher sharing via Arc across all FMU instances
 - **FMU Library Loader** (`fmu_loader.rs`): Complete platform-agnostic dynamic library loading:
   - Uses `libloading` crate for cross-platform compatibility
   - Loads all 34 FMI 3.0 function pointers dynamically
