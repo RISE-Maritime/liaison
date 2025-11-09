@@ -1,11 +1,11 @@
 // FMI 3.0 function definitions and exports
 // This module provides the C ABI exports for the FMI functions
 
-use std::os::raw::{c_char, c_void};
-use std::ffi::{CStr, CString};
-use std::slice;
 use crate::placeholder::Placeholder;
 use crate::proto;
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_void};
+use std::slice;
 
 // FMI 3.0 types (from FMI standard)
 pub type fmi3Instance = *mut c_void;
@@ -65,7 +65,8 @@ pub type fmi3IntermediateUpdateCallback = Option<
     ),
 >;
 
-pub type fmi3ClockUpdateCallback = Option<extern "C" fn(instanceEnvironment: fmi3InstanceEnvironment)>;
+pub type fmi3ClockUpdateCallback =
+    Option<extern "C" fn(instanceEnvironment: fmi3InstanceEnvironment)>;
 pub type fmi3LockPreemptionCallback = Option<extern "C" fn()>;
 pub type fmi3UnlockPreemptionCallback = Option<extern "C" fn()>;
 
@@ -113,9 +114,7 @@ unsafe fn c_str_to_string(c_str: fmi3String) -> String {
     if c_str.is_null() {
         String::new()
     } else {
-        CStr::from_ptr(c_str)
-            .to_string_lossy()
-            .into_owned()
+        CStr::from_ptr(c_str).to_string_lossy().into_owned()
     }
 }
 
@@ -160,27 +159,32 @@ pub extern "C" fn fmi3SetDebugLogging(
     // Get placeholder instance (returns fmi3Error if null)
     let placeholder = get_placeholder!(instance);
 
+    // Parse categories from C strings if provided
+    let categories_vec = if !categories.is_null() && n_categories > 0 {
+        unsafe {
+            let categories_slice = slice::from_raw_parts(categories, n_categories);
+            categories_slice
+                .iter()
+                .filter_map(|&category_ptr| {
+                    if !category_ptr.is_null() {
+                        CStr::from_ptr(category_ptr).to_str().ok().map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        }
+    } else {
+        Vec::new()
+    };
+
     // Create input message with instance reference
-    let mut input = proto::Fmi3SetDebugLoggingMessage {
+    let input = proto::Fmi3SetDebugLoggingMessage {
         instance_index: placeholder.instance_index,
         logging_on: logging_on != 0,
         n_categories: n_categories as i32,
-        categories: Vec::new(),
+        categories: categories_vec,
     };
-
-    // Parse categories from C strings if provided
-    if !categories.is_null() && n_categories > 0 {
-        unsafe {
-            let categories_slice = slice::from_raw_parts(categories, n_categories);
-            for &category_ptr in categories_slice {
-                if !category_ptr.is_null() {
-                    if let Ok(category_cstr) = CStr::from_ptr(category_ptr).to_str() {
-                        input.categories.push(category_cstr.to_string());
-                    }
-                }
-            }
-        }
-    }
 
     // Perform Zenoh query
     match placeholder.query::<proto::Fmi3SetDebugLoggingMessage, proto::Fmi3StatusMessage>(
@@ -210,10 +214,8 @@ pub extern "C" fn fmi3FreeInstance(instance: fmi3Instance) {
 
     // Perform Zenoh query to notify server
     // We ignore the result since we're cleaning up anyway
-    let _ = placeholder.query::<proto::Fmi3InstanceMessage, proto::Fmi3StatusMessage>(
-        "fmi3FreeInstance",
-        &input,
-    );
+    let _ = placeholder
+        .query::<proto::Fmi3InstanceMessage, proto::Fmi3StatusMessage>("fmi3FreeInstance", &input);
 
     // Clean up the Placeholder
     // SAFETY: The instance was created by Box::into_raw() in the instantiate functions,
@@ -255,8 +257,19 @@ pub extern "C" fn fmi3InstantiateCoSimulation(
             }
         };
 
+        // Copy required intermediate variables
+        let intermediate_vars = if !required_intermediate_variables.is_null() && n_required_intermediate_variables > 0 {
+            let vars_slice = slice::from_raw_parts(
+                required_intermediate_variables,
+                n_required_intermediate_variables,
+            );
+            vars_slice.iter().map(|&v| v as i32).collect()
+        } else {
+            Vec::new()
+        };
+
         // Build protobuf input message
-        let mut input = proto::Fmi3InstantiateCoSimulationMessage {
+        let input = proto::Fmi3InstantiateCoSimulationMessage {
             instance_name: c_str_to_string(instance_name),
             instantiation_token: c_str_to_string(instantiation_token),
             resource_path: c_str_to_string(resource_path),
@@ -264,21 +277,14 @@ pub extern "C" fn fmi3InstantiateCoSimulation(
             logging_on: logging_on != 0,
             event_mode_used: event_mode_used != 0,
             early_return_allowed: early_return_allowed != 0,
-            required_intermediate_variables: Vec::new(),
+            required_intermediate_variables: intermediate_vars,
             n_required_intermediate_variables: n_required_intermediate_variables as i32,
         };
 
-        // Copy required intermediate variables
-        if !required_intermediate_variables.is_null() && n_required_intermediate_variables > 0 {
-            let vars_slice = slice::from_raw_parts(
-                required_intermediate_variables,
-                n_required_intermediate_variables,
-            );
-            input.required_intermediate_variables = vars_slice.iter().map(|&v| v as i32).collect();
-        }
-
         // Send Zenoh query to server
-        let output: proto::Fmi3InstanceMessage = match placeholder.query("fmi3InstantiateCoSimulation", &input) {
+        let output: proto::Fmi3InstanceMessage = match placeholder
+            .query("fmi3InstantiateCoSimulation", &input)
+        {
             Ok(o) => o,
             Err(e) => {
                 let error_msg = format!("Query failed: {}", e);
@@ -324,7 +330,9 @@ pub extern "C" fn fmi3InstantiateModelExchange(
         };
 
         // Send Zenoh query to server
-        let output: proto::Fmi3InstanceMessage = match placeholder.query("fmi3InstantiateModelExchange", &input) {
+        let output: proto::Fmi3InstanceMessage = match placeholder
+            .query("fmi3InstantiateModelExchange", &input)
+        {
             Ok(o) => o,
             Err(e) => {
                 let error_msg = format!("Query failed: {}", e);
@@ -373,7 +381,9 @@ pub extern "C" fn fmi3InstantiateScheduledExecution(
         };
 
         // Send Zenoh query to server
-        let output: proto::Fmi3InstanceMessage = match placeholder.query("fmi3InstantiateScheduledExecution", &input) {
+        let output: proto::Fmi3InstanceMessage = match placeholder
+            .query("fmi3InstantiateScheduledExecution", &input)
+        {
             Ok(o) => o,
             Err(e) => {
                 let error_msg = format!("Query failed: {}", e);
@@ -437,11 +447,9 @@ pub extern "C" fn fmi3ExitInitializationMode(instance: fmi3Instance) -> fmi3Stat
 
     // Send query and get response
     match placeholder.query::<_, proto::Fmi3StatusMessage>("fmi3ExitInitializationMode", &input) {
-        Ok(output) => {
-            proto::Status::try_from(output.status)
-                .unwrap_or(proto::Status::Error)
-                .into()
-        }
+        Ok(output) => proto::Status::try_from(output.status)
+            .unwrap_or(proto::Status::Error)
+            .into(),
         Err(_) => fmi3Status::fmi3Fatal,
     }
 }
@@ -457,11 +465,9 @@ pub extern "C" fn fmi3Terminate(instance: fmi3Instance) -> fmi3Status {
 
     // Send query and get response
     match placeholder.query::<_, proto::Fmi3StatusMessage>("fmi3Terminate", &input) {
-        Ok(output) => {
-            proto::Status::try_from(output.status)
-                .unwrap_or(proto::Status::Error)
-                .into()
-        }
+        Ok(output) => proto::Status::try_from(output.status)
+            .unwrap_or(proto::Status::Error)
+            .into(),
         Err(_) => fmi3Status::fmi3Fatal,
     }
 }
@@ -477,11 +483,9 @@ pub extern "C" fn fmi3Reset(instance: fmi3Instance) -> fmi3Status {
 
     // Send query and get response
     match placeholder.query::<_, proto::Fmi3StatusMessage>("fmi3Reset", &input) {
-        Ok(output) => {
-            proto::Status::try_from(output.status)
-                .unwrap_or(proto::Status::Error)
-                .into()
-        }
+        Ok(output) => proto::Status::try_from(output.status)
+            .unwrap_or(proto::Status::Error)
+            .into(),
         Err(_) => fmi3Status::fmi3Fatal,
     }
 }
@@ -497,11 +501,9 @@ pub extern "C" fn fmi3EnterConfigurationMode(instance: fmi3Instance) -> fmi3Stat
 
     // Send query and get response
     match placeholder.query::<_, proto::Fmi3StatusMessage>("fmi3EnterConfigurationMode", &input) {
-        Ok(output) => {
-            proto::Status::try_from(output.status)
-                .unwrap_or(proto::Status::Error)
-                .into()
-        }
+        Ok(output) => proto::Status::try_from(output.status)
+            .unwrap_or(proto::Status::Error)
+            .into(),
         Err(_) => fmi3Status::fmi3Fatal,
     }
 }
@@ -517,11 +519,9 @@ pub extern "C" fn fmi3ExitConfigurationMode(instance: fmi3Instance) -> fmi3Statu
 
     // Send query and get response
     match placeholder.query::<_, proto::Fmi3StatusMessage>("fmi3ExitConfigurationMode", &input) {
-        Ok(output) => {
-            proto::Status::try_from(output.status)
-                .unwrap_or(proto::Status::Error)
-                .into()
-        }
+        Ok(output) => proto::Status::try_from(output.status)
+            .unwrap_or(proto::Status::Error)
+            .into(),
         Err(_) => fmi3Status::fmi3Fatal,
     }
 }
@@ -626,17 +626,14 @@ macro_rules! define_fmi3_get_value_function {
                 let placeholder = unsafe { &*(instance as *const Placeholder) };
 
                 // Build the input message
-                let mut input = <$proto_input>::default();
-                input.instance_index = placeholder.instance_index;
-
-                // Add value references
                 let value_refs_slice = unsafe {
                     slice::from_raw_parts(value_references, n_value_references)
                 };
-                for &vr in value_refs_slice {
-                    input.value_references.push(vr as i32);
-                }
-                input.n_value_references = n_value_references as i32;
+                let input = $proto_input {
+                    instance_index: placeholder.instance_index,
+                    value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+                    n_value_references: n_value_references as i32,
+                };
 
                 // Execute the query
                 let output: $proto_output = match placeholder.query(
@@ -653,8 +650,8 @@ macro_rules! define_fmi3_get_value_function {
                 };
 
                 let values_count = output.values.len().min(n_values);
-                for i in 0..values_count {
-                    values_slice[i] = output.values[i] as $fmi3_type;
+                for (idx, &val) in output.values.iter().take(values_count).enumerate() {
+                    values_slice[idx] = val as $fmi3_type;
                 }
 
                 // Return status
@@ -693,26 +690,19 @@ macro_rules! define_fmi3_set_value_function {
                 let placeholder = unsafe { &*(instance as *const Placeholder) };
 
                 // Build the input message
-                let mut input = <$proto_input>::default();
-                input.instance_index = placeholder.instance_index;
-
-                // Add value references
                 let value_refs_slice = unsafe {
                     slice::from_raw_parts(value_references, n_value_references)
                 };
-                for &vr in value_refs_slice {
-                    input.value_references.push(vr as i32);
-                }
-                input.n_value_references = n_value_references as i32;
-
-                // Add values
                 let values_slice = unsafe {
                     slice::from_raw_parts(values, n_values)
                 };
-                for &val in values_slice {
-                    input.values.push(val as $proto_value_type);
-                }
-                input.n_values = n_values as i32;
+                let input = $proto_input {
+                    instance_index: placeholder.instance_index,
+                    value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+                    n_value_references: n_value_references as i32,
+                    values: values_slice.iter().map(|&val| val as $proto_value_type).collect(),
+                    n_values: n_values as i32,
+                };
 
                 // Execute the query
                 let output: proto::Fmi3StatusMessage = match placeholder.query(
@@ -744,12 +734,7 @@ define_fmi3_get_value_function!(
     f64
 );
 
-define_fmi3_set_value_function!(
-    Float64,
-    fmi3Float64,
-    proto::Fmi3SetFloat64InputMessage,
-    f64
-);
+define_fmi3_set_value_function!(Float64, fmi3Float64, proto::Fmi3SetFloat64InputMessage, f64);
 
 define_fmi3_get_value_function!(
     Float32,
@@ -759,12 +744,7 @@ define_fmi3_get_value_function!(
     f32
 );
 
-define_fmi3_set_value_function!(
-    Float32,
-    fmi3Float32,
-    proto::Fmi3SetFloat32InputMessage,
-    f32
-);
+define_fmi3_set_value_function!(Float32, fmi3Float32, proto::Fmi3SetFloat32InputMessage, f32);
 
 //=============================================================================
 // Integer Functions
@@ -778,12 +758,7 @@ define_fmi3_get_value_function!(
     i32
 );
 
-define_fmi3_set_value_function!(
-    Int8,
-    fmi3Int8,
-    proto::Fmi3SetInt8InputMessage,
-    i32
-);
+define_fmi3_set_value_function!(Int8, fmi3Int8, proto::Fmi3SetInt8InputMessage, i32);
 
 define_fmi3_get_value_function!(
     UInt8,
@@ -793,12 +768,7 @@ define_fmi3_get_value_function!(
     u32
 );
 
-define_fmi3_set_value_function!(
-    UInt8,
-    fmi3UInt8,
-    proto::Fmi3SetUInt8InputMessage,
-    u32
-);
+define_fmi3_set_value_function!(UInt8, fmi3UInt8, proto::Fmi3SetUInt8InputMessage, u32);
 
 define_fmi3_get_value_function!(
     Int16,
@@ -808,12 +778,7 @@ define_fmi3_get_value_function!(
     i32
 );
 
-define_fmi3_set_value_function!(
-    Int16,
-    fmi3Int16,
-    proto::Fmi3SetInt16InputMessage,
-    i32
-);
+define_fmi3_set_value_function!(Int16, fmi3Int16, proto::Fmi3SetInt16InputMessage, i32);
 
 define_fmi3_get_value_function!(
     UInt16,
@@ -823,12 +788,7 @@ define_fmi3_get_value_function!(
     u32
 );
 
-define_fmi3_set_value_function!(
-    UInt16,
-    fmi3UInt16,
-    proto::Fmi3SetUInt16InputMessage,
-    u32
-);
+define_fmi3_set_value_function!(UInt16, fmi3UInt16, proto::Fmi3SetUInt16InputMessage, u32);
 
 define_fmi3_get_value_function!(
     Int32,
@@ -838,12 +798,7 @@ define_fmi3_get_value_function!(
     i32
 );
 
-define_fmi3_set_value_function!(
-    Int32,
-    fmi3Int32,
-    proto::Fmi3SetInt32InputMessage,
-    i32
-);
+define_fmi3_set_value_function!(Int32, fmi3Int32, proto::Fmi3SetInt32InputMessage, i32);
 
 define_fmi3_get_value_function!(
     UInt32,
@@ -853,12 +808,7 @@ define_fmi3_get_value_function!(
     u32
 );
 
-define_fmi3_set_value_function!(
-    UInt32,
-    fmi3UInt32,
-    proto::Fmi3SetUInt32InputMessage,
-    u32
-);
+define_fmi3_set_value_function!(UInt32, fmi3UInt32, proto::Fmi3SetUInt32InputMessage, u32);
 
 define_fmi3_get_value_function!(
     Int64,
@@ -868,12 +818,7 @@ define_fmi3_get_value_function!(
     i64
 );
 
-define_fmi3_set_value_function!(
-    Int64,
-    fmi3Int64,
-    proto::Fmi3SetInt64InputMessage,
-    i64
-);
+define_fmi3_set_value_function!(Int64, fmi3Int64, proto::Fmi3SetInt64InputMessage, i64);
 
 define_fmi3_get_value_function!(
     UInt64,
@@ -883,12 +828,7 @@ define_fmi3_get_value_function!(
     u64
 );
 
-define_fmi3_set_value_function!(
-    UInt64,
-    fmi3UInt64,
-    proto::Fmi3SetUInt64InputMessage,
-    u64
-);
+define_fmi3_set_value_function!(UInt64, fmi3UInt64, proto::Fmi3SetUInt64InputMessage, u64);
 
 //=============================================================================
 // Boolean Functions
@@ -912,32 +852,24 @@ pub extern "C" fn fmi3GetBoolean(
 
     let placeholder = unsafe { &*(instance as *const Placeholder) };
 
-    let mut input = proto::Fmi3GetBooleanInputMessage::default();
-    input.instance_index = placeholder.instance_index;
-
-    let value_refs_slice = unsafe {
-        slice::from_raw_parts(value_references, n_value_references)
-    };
-    for &vr in value_refs_slice {
-        input.value_references.push(vr as i32);
-    }
-    input.n_value_references = n_value_references as i32;
-
-    let output: proto::Fmi3GetBooleanOutputMessage = match placeholder.query(
-        "fmi3GetBoolean",
-        &input,
-    ) {
-        Ok(out) => out,
-        Err(_) => return fmi3Status::fmi3Fatal,
+    let value_refs_slice = unsafe { slice::from_raw_parts(value_references, n_value_references) };
+    let input = proto::Fmi3GetBooleanInputMessage {
+        instance_index: placeholder.instance_index,
+        value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+        n_value_references: n_value_references as i32,
     };
 
-    let values_slice = unsafe {
-        slice::from_raw_parts_mut(values, n_values)
-    };
+    let output: proto::Fmi3GetBooleanOutputMessage =
+        match placeholder.query("fmi3GetBoolean", &input) {
+            Ok(out) => out,
+            Err(_) => return fmi3Status::fmi3Fatal,
+        };
+
+    let values_slice = unsafe { slice::from_raw_parts_mut(values, n_values) };
 
     let values_count = output.values.len().min(n_values);
-    for i in 0..values_count {
-        values_slice[i] = if output.values[i] { 1 } else { 0 };
+    for (idx, &val) in output.values.iter().take(values_count).enumerate() {
+        values_slice[idx] = if val { 1 } else { 0 };
     }
 
     proto::Status::try_from(output.status)
@@ -962,29 +894,17 @@ pub extern "C" fn fmi3SetBoolean(
 
     let placeholder = unsafe { &*(instance as *const Placeholder) };
 
-    let mut input = proto::Fmi3SetBooleanInputMessage::default();
-    input.instance_index = placeholder.instance_index;
-
-    let value_refs_slice = unsafe {
-        slice::from_raw_parts(value_references, n_value_references)
+    let value_refs_slice = unsafe { slice::from_raw_parts(value_references, n_value_references) };
+    let values_slice = unsafe { slice::from_raw_parts(values, n_values) };
+    let input = proto::Fmi3SetBooleanInputMessage {
+        instance_index: placeholder.instance_index,
+        value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+        n_value_references: n_value_references as i32,
+        values: values_slice.iter().map(|&val| val != 0).collect(),
+        n_values: n_values as i32,
     };
-    for &vr in value_refs_slice {
-        input.value_references.push(vr as i32);
-    }
-    input.n_value_references = n_value_references as i32;
 
-    let values_slice = unsafe {
-        slice::from_raw_parts(values, n_values)
-    };
-    for &val in values_slice {
-        input.values.push(val != 0);
-    }
-    input.n_values = n_values as i32;
-
-    let output: proto::Fmi3StatusMessage = match placeholder.query(
-        "fmi3SetBoolean",
-        &input,
-    ) {
+    let output: proto::Fmi3StatusMessage = match placeholder.query("fmi3SetBoolean", &input) {
         Ok(out) => out,
         Err(_) => return fmi3Status::fmi3Fatal,
     };
@@ -1016,34 +936,26 @@ pub extern "C" fn fmi3GetString(
 
     let placeholder = unsafe { &*(instance as *const Placeholder) };
 
-    let mut input = proto::Fmi3GetStringInputMessage::default();
-    input.instance_index = placeholder.instance_index;
-
-    let value_refs_slice = unsafe {
-        slice::from_raw_parts(value_references, n_value_references)
+    let value_refs_slice = unsafe { slice::from_raw_parts(value_references, n_value_references) };
+    let input = proto::Fmi3GetStringInputMessage {
+        instance_index: placeholder.instance_index,
+        value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+        n_value_references: n_value_references as i32,
     };
-    for &vr in value_refs_slice {
-        input.value_references.push(vr as i32);
-    }
-    input.n_value_references = n_value_references as i32;
 
-    let output: proto::Fmi3GetStringOutputMessage = match placeholder.query(
-        "fmi3GetString",
-        &input,
-    ) {
+    let output: proto::Fmi3GetStringOutputMessage = match placeholder.query("fmi3GetString", &input)
+    {
         Ok(out) => out,
         Err(_) => return fmi3Status::fmi3Fatal,
     };
 
-    let values_slice = unsafe {
-        slice::from_raw_parts_mut(values, n_values)
-    };
+    let values_slice = unsafe { slice::from_raw_parts_mut(values, n_values) };
 
     let values_count = output.values.len().min(n_values);
-    for i in 0..values_count {
-        match CString::new(output.values[i].as_str()) {
+    for (idx, val) in output.values.iter().take(values_count).enumerate() {
+        match CString::new(val.as_str()) {
             Ok(c_str) => {
-                values_slice[i] = c_str.into_raw();
+                values_slice[idx] = c_str.into_raw();
             }
             Err(_) => {
                 return fmi3Status::fmi3Error;
@@ -1074,21 +986,11 @@ pub extern "C" fn fmi3SetString(
 
     let placeholder = unsafe { &*(instance as *const Placeholder) };
 
-    let mut input = proto::Fmi3SetStringInputMessage::default();
-    input.instance_index = placeholder.instance_index;
+    let value_refs_slice = unsafe { slice::from_raw_parts(value_references, n_value_references) };
+    let values_slice = unsafe { slice::from_raw_parts(values, n_values) };
 
-    let value_refs_slice = unsafe {
-        slice::from_raw_parts(value_references, n_value_references)
-    };
-    for &vr in value_refs_slice {
-        input.value_references.push(vr as i32);
-    }
-    input.n_value_references = n_value_references as i32;
-
-    let values_slice = unsafe {
-        slice::from_raw_parts(values, n_values)
-    };
-
+    // Convert C strings to Rust strings
+    let mut string_values = Vec::with_capacity(n_values);
     for &c_str_ptr in values_slice {
         if c_str_ptr.is_null() {
             return fmi3Status::fmi3Error;
@@ -1097,19 +999,23 @@ pub extern "C" fn fmi3SetString(
         let c_str = unsafe { CStr::from_ptr(c_str_ptr) };
         match c_str.to_str() {
             Ok(rust_str) => {
-                input.values.push(rust_str.to_string());
+                string_values.push(rust_str.to_string());
             }
             Err(_) => {
                 return fmi3Status::fmi3Error;
             }
         }
     }
-    input.n_values = n_values as i32;
 
-    let output: proto::Fmi3StatusMessage = match placeholder.query(
-        "fmi3SetString",
-        &input,
-    ) {
+    let input = proto::Fmi3SetStringInputMessage {
+        instance_index: placeholder.instance_index,
+        value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+        n_value_references: n_value_references as i32,
+        values: string_values,
+        n_values: n_values as i32,
+    };
+
+    let output: proto::Fmi3StatusMessage = match placeholder.query("fmi3SetString", &input) {
         Ok(out) => out,
         Err(_) => return fmi3Status::fmi3Fatal,
     };
@@ -1133,7 +1039,8 @@ pub extern "C" fn fmi3GetBinary(
     n_values: usize,
 ) -> fmi3Status {
     // Null pointer checks
-    if instance.is_null() || value_references.is_null() || value_sizes.is_null() || values.is_null() {
+    if instance.is_null() || value_references.is_null() || value_sizes.is_null() || values.is_null()
+    {
         return fmi3Status::fmi3Error;
     }
     if n_value_references == 0 || n_values == 0 {
@@ -1142,45 +1049,34 @@ pub extern "C" fn fmi3GetBinary(
 
     let placeholder = unsafe { &*(instance as *const Placeholder) };
 
-    let mut input = proto::Fmi3GetBinaryInputMessage::default();
-    input.instance_index = placeholder.instance_index;
-
-    let value_refs_slice = unsafe {
-        slice::from_raw_parts(value_references, n_value_references)
+    let value_refs_slice = unsafe { slice::from_raw_parts(value_references, n_value_references) };
+    let input = proto::Fmi3GetBinaryInputMessage {
+        instance_index: placeholder.instance_index,
+        value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+        n_value_references: n_value_references as i32,
     };
-    for &vr in value_refs_slice {
-        input.value_references.push(vr as i32);
-    }
-    input.n_value_references = n_value_references as i32;
 
-    let output: proto::Fmi3GetBinaryOutputMessage = match placeholder.query(
-        "fmi3GetBinary",
-        &input,
-    ) {
+    let output: proto::Fmi3GetBinaryOutputMessage = match placeholder.query("fmi3GetBinary", &input)
+    {
         Ok(out) => out,
         Err(_) => return fmi3Status::fmi3Fatal,
     };
 
-    let sizes_slice = unsafe {
-        slice::from_raw_parts_mut(value_sizes, n_values)
-    };
-    let values_slice = unsafe {
-        slice::from_raw_parts_mut(values, n_values)
-    };
+    let sizes_slice = unsafe { slice::from_raw_parts_mut(value_sizes, n_values) };
+    let values_slice = unsafe { slice::from_raw_parts_mut(values, n_values) };
 
     let values_count = output.values.len().min(n_values);
 
-    for i in 0..values_count {
-        let binary_data = &output.values[i];
+    for (idx, binary_data) in output.values.iter().take(values_count).enumerate() {
         let binary_size = binary_data.len();
 
-        sizes_slice[i] = binary_size;
+        sizes_slice[idx] = binary_size;
 
         let mut binary_vec = binary_data.clone();
         let binary_ptr = binary_vec.as_mut_ptr();
         std::mem::forget(binary_vec);
 
-        values_slice[i] = binary_ptr;
+        values_slice[idx] = binary_ptr;
     }
 
     proto::Status::try_from(output.status)
@@ -1198,7 +1094,8 @@ pub extern "C" fn fmi3SetBinary(
     n_values: usize,
 ) -> fmi3Status {
     // Null pointer checks
-    if instance.is_null() || value_references.is_null() || value_sizes.is_null() || values.is_null() {
+    if instance.is_null() || value_references.is_null() || value_sizes.is_null() || values.is_null()
+    {
         return fmi3Status::fmi3Error;
     }
     if n_value_references == 0 || n_values == 0 {
@@ -1207,44 +1104,30 @@ pub extern "C" fn fmi3SetBinary(
 
     let placeholder = unsafe { &*(instance as *const Placeholder) };
 
-    let mut input = proto::Fmi3SetBinaryInputMessage::default();
-    input.instance_index = placeholder.instance_index;
+    let value_refs_slice = unsafe { slice::from_raw_parts(value_references, n_value_references) };
+    let sizes_slice = unsafe { slice::from_raw_parts(value_sizes, n_values) };
+    let values_slice = unsafe { slice::from_raw_parts(values, n_values) };
 
-    let value_refs_slice = unsafe {
-        slice::from_raw_parts(value_references, n_value_references)
-    };
-    for &vr in value_refs_slice {
-        input.value_references.push(vr as i32);
-    }
-    input.n_value_references = n_value_references as i32;
-
-    let sizes_slice = unsafe {
-        slice::from_raw_parts(value_sizes, n_values)
-    };
-    let values_slice = unsafe {
-        slice::from_raw_parts(values, n_values)
-    };
-
-    for i in 0..n_values {
-        let binary_size = sizes_slice[i];
-        let binary_ptr = values_slice[i];
-
+    // Convert binary data to Vec<Vec<u8>>
+    let mut binary_values = Vec::with_capacity(n_values);
+    for (binary_ptr, &binary_size) in values_slice.iter().zip(sizes_slice.iter()) {
         if binary_ptr.is_null() {
             return fmi3Status::fmi3Error;
         }
 
-        let binary_data = unsafe {
-            slice::from_raw_parts(binary_ptr, binary_size)
-        };
-
-        input.values.push(binary_data.to_vec());
+        let binary_data = unsafe { slice::from_raw_parts(*binary_ptr, binary_size) };
+        binary_values.push(binary_data.to_vec());
     }
-    input.n_values = n_values as i32;
 
-    let output: proto::Fmi3StatusMessage = match placeholder.query(
-        "fmi3SetBinary",
-        &input,
-    ) {
+    let input = proto::Fmi3SetBinaryInputMessage {
+        instance_index: placeholder.instance_index,
+        value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+        n_value_references: n_value_references as i32,
+        values: binary_values,
+        n_values: n_values as i32,
+    };
+
+    let output: proto::Fmi3StatusMessage = match placeholder.query("fmi3SetBinary", &input) {
         Ok(out) => out,
         Err(_) => return fmi3Status::fmi3Fatal,
     };
@@ -1275,32 +1158,23 @@ pub extern "C" fn fmi3GetClock(
 
     let placeholder = unsafe { &*(instance as *const Placeholder) };
 
-    let mut input = proto::Fmi3GetClockInputMessage::default();
-    input.instance_index = placeholder.instance_index;
-
-    let value_refs_slice = unsafe {
-        slice::from_raw_parts(value_references, n_value_references)
+    let value_refs_slice = unsafe { slice::from_raw_parts(value_references, n_value_references) };
+    let input = proto::Fmi3GetClockInputMessage {
+        instance_index: placeholder.instance_index,
+        value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+        n_value_references: n_value_references as i32,
     };
-    for &vr in value_refs_slice {
-        input.value_references.push(vr as i32);
-    }
-    input.n_value_references = n_value_references as i32;
 
-    let output: proto::Fmi3GetClockOutputMessage = match placeholder.query(
-        "fmi3GetClock",
-        &input,
-    ) {
+    let output: proto::Fmi3GetClockOutputMessage = match placeholder.query("fmi3GetClock", &input) {
         Ok(out) => out,
         Err(_) => return fmi3Status::fmi3Fatal,
     };
 
-    let values_slice = unsafe {
-        slice::from_raw_parts_mut(values, n_value_references)
-    };
+    let values_slice = unsafe { slice::from_raw_parts_mut(values, n_value_references) };
 
     let values_count = output.values.len().min(n_value_references);
-    for i in 0..values_count {
-        values_slice[i] = if output.values[i] { 1 } else { 0 };
+    for (idx, &val) in output.values.iter().take(values_count).enumerate() {
+        values_slice[idx] = if val { 1 } else { 0 };
     }
 
     proto::Status::try_from(output.status)
@@ -1325,26 +1199,17 @@ pub extern "C" fn fmi3SetClock(
 
     let placeholder = unsafe { &*(instance as *const Placeholder) };
 
-    let mut input = proto::Fmi3SetClockInputMessage::default();
-    input.instance_index = placeholder.instance_index;
+    let value_refs_slice = unsafe { slice::from_raw_parts(value_references, n_value_references) };
+    let values_slice = unsafe { slice::from_raw_parts(values, n_value_references) };
 
-    let value_refs_slice = unsafe {
-        slice::from_raw_parts(value_references, n_value_references)
+    let input = proto::Fmi3SetClockInputMessage {
+        instance_index: placeholder.instance_index,
+        value_references: value_refs_slice.iter().map(|&vr| vr as i32).collect(),
+        values: values_slice.iter().map(|&val| val != 0).collect(),
+        n_value_references: n_value_references as i32,
     };
-    let values_slice = unsafe {
-        slice::from_raw_parts(values, n_value_references)
-    };
 
-    for i in 0..n_value_references {
-        input.value_references.push(value_refs_slice[i] as i32);
-        input.values.push(values_slice[i] != 0);
-    }
-    input.n_value_references = n_value_references as i32;
-
-    let output: proto::Fmi3StatusMessage = match placeholder.query(
-        "fmi3SetClock",
-        &input,
-    ) {
+    let output: proto::Fmi3StatusMessage = match placeholder.query("fmi3SetClock", &input) {
         Ok(out) => out,
         Err(_) => return fmi3Status::fmi3Fatal,
     };

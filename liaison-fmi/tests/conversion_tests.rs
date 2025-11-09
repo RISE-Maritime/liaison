@@ -132,7 +132,7 @@ fn test_conversion_pattern_matching() {
     let fmi_status: fmi3Status = proto_status.into();
 
     match fmi_status {
-        fmi3Status::fmi3OK => assert!(true),
+        fmi3Status::fmi3OK => {}
         _ => panic!("Expected fmi3OK"),
     }
 }

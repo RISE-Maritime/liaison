@@ -21,8 +21,8 @@ pub fn create_temp_directory() -> Result<String> {
 
 /// Unzip an FMU file to a temporary directory
 pub fn unzip_fmu<P: AsRef<Path>>(fmu_path: P) -> Result<String> {
-    use zip::ZipArchive;
     use std::fs::File;
+    use zip::ZipArchive;
 
     let file = File::open(fmu_path)?;
     let mut archive = ZipArchive::new(file)?;
@@ -84,17 +84,22 @@ mod tests {
         let mut zip = ZipWriter::new(file);
 
         // Add some test files
-        zip.start_file("modelDescription.xml", SimpleFileOptions::default()).unwrap();
-        zip.write_all(b"<fmiModelDescription></fmiModelDescription>").unwrap();
+        zip.start_file("modelDescription.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"<fmiModelDescription></fmiModelDescription>")
+            .unwrap();
 
-        zip.start_file("binaries/linux64/model.so", SimpleFileOptions::default()).unwrap();
+        zip.start_file("binaries/linux64/model.so", SimpleFileOptions::default())
+            .unwrap();
         zip.write_all(b"fake binary content").unwrap();
 
-        zip.start_file("resources/data.txt", SimpleFileOptions::default()).unwrap();
+        zip.start_file("resources/data.txt", SimpleFileOptions::default())
+            .unwrap();
         zip.write_all(b"test data").unwrap();
 
         // Add a directory entry
-        zip.add_directory("sources/", SimpleFileOptions::default()).unwrap();
+        zip.add_directory("sources/", SimpleFileOptions::default())
+            .unwrap();
 
         zip.finish().unwrap();
         fmu_path
@@ -287,7 +292,8 @@ mod tests {
         let mut zip = ZipWriter::new(file);
 
         // Create deeply nested structure
-        zip.start_file("a/b/c/d/e/file.txt", SimpleFileOptions::default()).unwrap();
+        zip.start_file("a/b/c/d/e/file.txt", SimpleFileOptions::default())
+            .unwrap();
         zip.write_all(b"nested content").unwrap();
 
         zip.finish().unwrap();
@@ -405,7 +411,10 @@ mod tests {
         // Create a binary file
         let binary_file = temp_dir.path().join("binary.bin");
         let binary_data: Vec<u8> = (0..=255).collect();
-        File::create(&binary_file).unwrap().write_all(&binary_data).unwrap();
+        File::create(&binary_file)
+            .unwrap()
+            .write_all(&binary_data)
+            .unwrap();
 
         // Create a ZIP archive
         let zip_path = temp_dir.path().join("output.zip");
@@ -462,7 +471,10 @@ mod tests {
         // Create a large file (1MB)
         let large_file = temp_dir.path().join("large.txt");
         let large_data = vec![b'X'; 1024 * 1024];
-        File::create(&large_file).unwrap().write_all(&large_data).unwrap();
+        File::create(&large_file)
+            .unwrap()
+            .write_all(&large_data)
+            .unwrap();
 
         // Create a ZIP archive
         let zip_path = temp_dir.path().join("output.zip");
@@ -505,7 +517,10 @@ mod tests {
 
         // Create a test file
         let test_file = temp_dir.path().join("test.txt");
-        File::create(&test_file).unwrap().write_all(b"Test").unwrap();
+        File::create(&test_file)
+            .unwrap()
+            .write_all(b"Test")
+            .unwrap();
 
         // Create a ZIP archive
         let zip_path = temp_dir.path().join("output.zip");

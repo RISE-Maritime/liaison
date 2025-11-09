@@ -22,8 +22,14 @@ fn test_proto_status_to_fmi_status_conversions() {
         fmi3Status::from(proto::Status::Discard),
         fmi3Status::fmi3Discard
     );
-    assert_eq!(fmi3Status::from(proto::Status::Error), fmi3Status::fmi3Error);
-    assert_eq!(fmi3Status::from(proto::Status::Fatal), fmi3Status::fmi3Fatal);
+    assert_eq!(
+        fmi3Status::from(proto::Status::Error),
+        fmi3Status::fmi3Error
+    );
+    assert_eq!(
+        fmi3Status::from(proto::Status::Fatal),
+        fmi3Status::fmi3Fatal
+    );
 }
 
 #[test]
@@ -149,11 +155,11 @@ fn test_fmi3_enter_initialization_mode_with_null() {
     // Test that enter initialization mode with null instance returns error
     let status = fmi3EnterInitializationMode(
         ptr::null_mut(),
-        0,     // toleranceDefined
-        0.0,   // tolerance
-        0.0,   // startTime
-        0,     // stopTimeDefined
-        0.0,   // stopTime
+        0,   // toleranceDefined
+        0.0, // tolerance
+        0.0, // startTime
+        0,   // stopTimeDefined
+        0.0, // stopTime
     );
     assert_eq!(
         status,
@@ -339,12 +345,24 @@ fn test_null_instance_pointer_safety() {
     let null_instance: fmi3Instance = ptr::null_mut();
 
     // These should all return error status without crashing
-    assert_eq!(fmi3SetDebugLogging(null_instance, 0, 0, ptr::null()), fmi3Status::fmi3Error);
+    assert_eq!(
+        fmi3SetDebugLogging(null_instance, 0, 0, ptr::null()),
+        fmi3Status::fmi3Error
+    );
     assert_eq!(fmi3Terminate(null_instance), fmi3Status::fmi3Error);
     assert_eq!(fmi3Reset(null_instance), fmi3Status::fmi3Error);
-    assert_eq!(fmi3EnterConfigurationMode(null_instance), fmi3Status::fmi3Error);
-    assert_eq!(fmi3ExitConfigurationMode(null_instance), fmi3Status::fmi3Error);
-    assert_eq!(fmi3ExitInitializationMode(null_instance), fmi3Status::fmi3Error);
+    assert_eq!(
+        fmi3EnterConfigurationMode(null_instance),
+        fmi3Status::fmi3Error
+    );
+    assert_eq!(
+        fmi3ExitConfigurationMode(null_instance),
+        fmi3Status::fmi3Error
+    );
+    assert_eq!(
+        fmi3ExitInitializationMode(null_instance),
+        fmi3Status::fmi3Error
+    );
 
     // FreeInstance should handle null gracefully (void return)
     fmi3FreeInstance(null_instance);
@@ -359,11 +377,23 @@ fn test_null_pointer_safety_in_getters_setters() {
 
     // Boolean operations
     assert_eq!(
-        fmi3GetBoolean(null_instance, value_refs.as_ptr(), 1, values_bool.as_mut_ptr(), 1),
+        fmi3GetBoolean(
+            null_instance,
+            value_refs.as_ptr(),
+            1,
+            values_bool.as_mut_ptr(),
+            1
+        ),
         fmi3Status::fmi3Error
     );
     assert_eq!(
-        fmi3SetBoolean(null_instance, value_refs.as_ptr(), 1, values_bool.as_ptr(), 1),
+        fmi3SetBoolean(
+            null_instance,
+            value_refs.as_ptr(),
+            1,
+            values_bool.as_ptr(),
+            1
+        ),
         fmi3Status::fmi3Error
     );
 }
@@ -539,7 +569,10 @@ fn test_fmi3_instantiate_co_simulation_with_null_name() {
         None,            // intermediateUpdate callback
     );
 
-    assert!(instance.is_null(), "Instantiation with null name should return null");
+    assert!(
+        instance.is_null(),
+        "Instantiation with null name should return null"
+    );
 }
 
 #[test]
@@ -555,7 +588,10 @@ fn test_fmi3_instantiate_model_exchange_with_null_name() {
         None,            // logMessage callback
     );
 
-    assert!(instance.is_null(), "ME instantiation with null name should return null");
+    assert!(
+        instance.is_null(),
+        "ME instantiation with null name should return null"
+    );
 }
 
 #[test]
@@ -574,7 +610,10 @@ fn test_fmi3_instantiate_scheduled_execution_with_null_name() {
         None,            // unlockPreemption callback
     );
 
-    assert!(instance.is_null(), "SE instantiation with null name should return null");
+    assert!(
+        instance.is_null(),
+        "SE instantiation with null name should return null"
+    );
 }
 
 //=============================================================================
@@ -629,6 +668,7 @@ fn test_api_completeness() {
 #[test]
 fn test_send_trait_for_placeholder() {
     // This is a compile-time test - if it compiles, Placeholder implements Send
+    #[allow(dead_code)]
     fn assert_send<T: Send>() {}
     // Note: We can't directly test Placeholder here since it's not exported,
     // but the impl in placeholder.rs ensures it's Send

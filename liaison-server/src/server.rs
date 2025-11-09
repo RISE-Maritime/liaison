@@ -11,7 +11,7 @@
 //!
 //! Based on C++ implementation in src/liaison.cpp (lines 755-915)
 
-use crate::fmu_loader::{FmuLibrary, construct_library_path};
+use crate::fmu_loader::{construct_library_path, FmuLibrary};
 use crate::instance_manager::InstanceManager;
 use crate::queryable_handlers;
 use crate::utils::unzip_fmu;
@@ -88,8 +88,7 @@ pub fn start_server(
 
     // Unzip FMU to temporary directory
     info!("Extracting FMU...");
-    let temp_path = unzip_fmu(&fmu_path)
-        .context("Failed to extract FMU")?;
+    let temp_path = unzip_fmu(&fmu_path).context("Failed to extract FMU")?;
     debug!("FMU extracted to: {}", temp_path);
 
     // Construct library path
@@ -102,10 +101,7 @@ pub fn start_server(
 
     // Load FMU library
     info!("Loading FMU library...");
-    let fmu = Arc::new(
-        FmuLibrary::new(&lib_path)
-            .context("Failed to load FMU library")?
-    );
+    let fmu = Arc::new(FmuLibrary::new(&lib_path).context("Failed to load FMU library")?);
     info!("FMU library loaded successfully");
 
     //=========================================================================
@@ -115,8 +111,12 @@ pub fn start_server(
     info!("Starting Zenoh session...");
     let zenoh_config = if let Some(config_path) = zenoh_config {
         // Load config from file
-        let config_str = std::fs::read_to_string(&config_path)
-            .with_context(|| format!("Failed to read Zenoh config file: {}", config_path.display()))?;
+        let config_str = std::fs::read_to_string(&config_path).with_context(|| {
+            format!(
+                "Failed to read Zenoh config file: {}",
+                config_path.display()
+            )
+        })?;
 
         let config: zenoh::Config = serde_json::from_str(&config_str)
             .with_context(|| format!("Failed to parse Zenoh config: {}", config_path.display()))?;
@@ -129,7 +129,7 @@ pub fn start_server(
     let session = Arc::new(
         zenoh::open(zenoh_config)
             .wait()
-            .map_err(|e| anyhow::anyhow!("Failed to open Zenoh session: {:?}", e))?
+            .map_err(|e| anyhow::anyhow!("Failed to open Zenoh session: {:?}", e))?,
     );
     info!("Zenoh session opened");
 
@@ -142,7 +142,7 @@ pub fn start_server(
         session
             .declare_publisher(&log_message_key)
             .wait()
-            .map_err(|e| anyhow::anyhow!("Failed to declare log message publisher: {:?}", e))?
+            .map_err(|e| anyhow::anyhow!("Failed to declare log message publisher: {:?}", e))?,
     );
     debug!("Log message publisher declared: {}", log_message_key);
 
@@ -175,12 +175,16 @@ pub fn start_server(
             let queryable = session
                 .declare_queryable(&key)
                 .callback(move |query| {
-                    if let Err(e) = $handler(query, &fmu, Arc::clone(&instance_manager), &resource_path) {
+                    if let Err(e) =
+                        $handler(query, &fmu, Arc::clone(&instance_manager), &resource_path)
+                    {
                         error!("Error handling {}: {:?}", $func_name, e);
                     }
                 })
                 .wait()
-                .map_err(|e| anyhow::anyhow!("Failed to declare queryable for {}: {:?}", $func_name, e))?;
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to declare queryable for {}: {:?}", $func_name, e)
+                })?;
 
             debug!("Declared queryable: {}", key);
             queryable
@@ -223,181 +227,115 @@ pub fn start_server(
         queryable_handlers::handle_enter_event_mode
     );
 
-    let _queryable_free_instance = declare_queryable!(
-        "fmi3FreeInstance",
-        queryable_handlers::handle_free_instance
-    );
+    let _queryable_free_instance =
+        declare_queryable!("fmi3FreeInstance", queryable_handlers::handle_free_instance);
 
-    let _queryable_do_step = declare_queryable!(
-        "fmi3DoStep",
-        queryable_handlers::handle_do_step
-    );
+    let _queryable_do_step = declare_queryable!("fmi3DoStep", queryable_handlers::handle_do_step);
 
     // Get/Set Float32
-    let _queryable_set_float32 = declare_queryable!(
-        "fmi3SetFloat32",
-        queryable_handlers::handle_set_float32
-    );
+    let _queryable_set_float32 =
+        declare_queryable!("fmi3SetFloat32", queryable_handlers::handle_set_float32);
 
-    let _queryable_get_float32 = declare_queryable!(
-        "fmi3GetFloat32",
-        queryable_handlers::handle_get_float32
-    );
+    let _queryable_get_float32 =
+        declare_queryable!("fmi3GetFloat32", queryable_handlers::handle_get_float32);
 
     // Get/Set Float64
-    let _queryable_set_float64 = declare_queryable!(
-        "fmi3SetFloat64",
-        queryable_handlers::handle_set_float64
-    );
+    let _queryable_set_float64 =
+        declare_queryable!("fmi3SetFloat64", queryable_handlers::handle_set_float64);
 
-    let _queryable_get_float64 = declare_queryable!(
-        "fmi3GetFloat64",
-        queryable_handlers::handle_get_float64
-    );
+    let _queryable_get_float64 =
+        declare_queryable!("fmi3GetFloat64", queryable_handlers::handle_get_float64);
 
     // Get/Set Int8
-    let _queryable_set_int8 = declare_queryable!(
-        "fmi3SetInt8",
-        queryable_handlers::handle_set_int8
-    );
+    let _queryable_set_int8 =
+        declare_queryable!("fmi3SetInt8", queryable_handlers::handle_set_int8);
 
-    let _queryable_get_int8 = declare_queryable!(
-        "fmi3GetInt8",
-        queryable_handlers::handle_get_int8
-    );
+    let _queryable_get_int8 =
+        declare_queryable!("fmi3GetInt8", queryable_handlers::handle_get_int8);
 
     // Get/Set UInt8
-    let _queryable_set_uint8 = declare_queryable!(
-        "fmi3SetUInt8",
-        queryable_handlers::handle_set_uint8
-    );
+    let _queryable_set_uint8 =
+        declare_queryable!("fmi3SetUInt8", queryable_handlers::handle_set_uint8);
 
-    let _queryable_get_uint8 = declare_queryable!(
-        "fmi3GetUInt8",
-        queryable_handlers::handle_get_uint8
-    );
+    let _queryable_get_uint8 =
+        declare_queryable!("fmi3GetUInt8", queryable_handlers::handle_get_uint8);
 
     // Get/Set Int16
-    let _queryable_set_int16 = declare_queryable!(
-        "fmi3SetInt16",
-        queryable_handlers::handle_set_int16
-    );
+    let _queryable_set_int16 =
+        declare_queryable!("fmi3SetInt16", queryable_handlers::handle_set_int16);
 
-    let _queryable_get_int16 = declare_queryable!(
-        "fmi3GetInt16",
-        queryable_handlers::handle_get_int16
-    );
+    let _queryable_get_int16 =
+        declare_queryable!("fmi3GetInt16", queryable_handlers::handle_get_int16);
 
     // Get/Set UInt16
-    let _queryable_set_uint16 = declare_queryable!(
-        "fmi3SetUInt16",
-        queryable_handlers::handle_set_uint16
-    );
+    let _queryable_set_uint16 =
+        declare_queryable!("fmi3SetUInt16", queryable_handlers::handle_set_uint16);
 
-    let _queryable_get_uint16 = declare_queryable!(
-        "fmi3GetUInt16",
-        queryable_handlers::handle_get_uint16
-    );
+    let _queryable_get_uint16 =
+        declare_queryable!("fmi3GetUInt16", queryable_handlers::handle_get_uint16);
 
     // Get/Set Int32
-    let _queryable_set_int32 = declare_queryable!(
-        "fmi3SetInt32",
-        queryable_handlers::handle_set_int32
-    );
+    let _queryable_set_int32 =
+        declare_queryable!("fmi3SetInt32", queryable_handlers::handle_set_int32);
 
-    let _queryable_get_int32 = declare_queryable!(
-        "fmi3GetInt32",
-        queryable_handlers::handle_get_int32
-    );
+    let _queryable_get_int32 =
+        declare_queryable!("fmi3GetInt32", queryable_handlers::handle_get_int32);
 
     // Get/Set UInt32
-    let _queryable_set_uint32 = declare_queryable!(
-        "fmi3SetUInt32",
-        queryable_handlers::handle_set_uint32
-    );
+    let _queryable_set_uint32 =
+        declare_queryable!("fmi3SetUInt32", queryable_handlers::handle_set_uint32);
 
-    let _queryable_get_uint32 = declare_queryable!(
-        "fmi3GetUInt32",
-        queryable_handlers::handle_get_uint32
-    );
+    let _queryable_get_uint32 =
+        declare_queryable!("fmi3GetUInt32", queryable_handlers::handle_get_uint32);
 
     // Get/Set Int64
-    let _queryable_set_int64 = declare_queryable!(
-        "fmi3SetInt64",
-        queryable_handlers::handle_set_int64
-    );
+    let _queryable_set_int64 =
+        declare_queryable!("fmi3SetInt64", queryable_handlers::handle_set_int64);
 
-    let _queryable_get_int64 = declare_queryable!(
-        "fmi3GetInt64",
-        queryable_handlers::handle_get_int64
-    );
+    let _queryable_get_int64 =
+        declare_queryable!("fmi3GetInt64", queryable_handlers::handle_get_int64);
 
     // Get/Set UInt64
-    let _queryable_set_uint64 = declare_queryable!(
-        "fmi3SetUInt64",
-        queryable_handlers::handle_set_uint64
-    );
+    let _queryable_set_uint64 =
+        declare_queryable!("fmi3SetUInt64", queryable_handlers::handle_set_uint64);
 
-    let _queryable_get_uint64 = declare_queryable!(
-        "fmi3GetUInt64",
-        queryable_handlers::handle_get_uint64
-    );
+    let _queryable_get_uint64 =
+        declare_queryable!("fmi3GetUInt64", queryable_handlers::handle_get_uint64);
 
     // Get/Set Boolean
-    let _queryable_set_boolean = declare_queryable!(
-        "fmi3SetBoolean",
-        queryable_handlers::handle_set_boolean
-    );
+    let _queryable_set_boolean =
+        declare_queryable!("fmi3SetBoolean", queryable_handlers::handle_set_boolean);
 
-    let _queryable_get_boolean = declare_queryable!(
-        "fmi3GetBoolean",
-        queryable_handlers::handle_get_boolean
-    );
+    let _queryable_get_boolean =
+        declare_queryable!("fmi3GetBoolean", queryable_handlers::handle_get_boolean);
 
     // Get/Set String
-    let _queryable_set_string = declare_queryable!(
-        "fmi3SetString",
-        queryable_handlers::handle_set_string
-    );
+    let _queryable_set_string =
+        declare_queryable!("fmi3SetString", queryable_handlers::handle_set_string);
 
-    let _queryable_get_string = declare_queryable!(
-        "fmi3GetString",
-        queryable_handlers::handle_get_string
-    );
+    let _queryable_get_string =
+        declare_queryable!("fmi3GetString", queryable_handlers::handle_get_string);
 
     // Get/Set Clock
-    let _queryable_set_clock = declare_queryable!(
-        "fmi3SetClock",
-        queryable_handlers::handle_set_clock
-    );
+    let _queryable_set_clock =
+        declare_queryable!("fmi3SetClock", queryable_handlers::handle_set_clock);
 
-    let _queryable_get_clock = declare_queryable!(
-        "fmi3GetClock",
-        queryable_handlers::handle_get_clock
-    );
+    let _queryable_get_clock =
+        declare_queryable!("fmi3GetClock", queryable_handlers::handle_get_clock);
 
     // Get/Set Binary
-    let _queryable_set_binary = declare_queryable!(
-        "fmi3SetBinary",
-        queryable_handlers::handle_set_binary
-    );
+    let _queryable_set_binary =
+        declare_queryable!("fmi3SetBinary", queryable_handlers::handle_set_binary);
 
-    let _queryable_get_binary = declare_queryable!(
-        "fmi3GetBinary",
-        queryable_handlers::handle_get_binary
-    );
+    let _queryable_get_binary =
+        declare_queryable!("fmi3GetBinary", queryable_handlers::handle_get_binary);
 
     // Reset
-    let _queryable_reset = declare_queryable!(
-        "fmi3Reset",
-        queryable_handlers::handle_reset
-    );
+    let _queryable_reset = declare_queryable!("fmi3Reset", queryable_handlers::handle_reset);
 
     // Terminate
-    let _queryable_terminate = declare_queryable!(
-        "fmi3Terminate",
-        queryable_handlers::handle_terminate
-    );
+    let _queryable_terminate =
+        declare_queryable!("fmi3Terminate", queryable_handlers::handle_terminate);
 
     info!("All queryables declared successfully");
 

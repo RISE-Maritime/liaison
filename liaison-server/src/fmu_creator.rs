@@ -190,8 +190,7 @@ pub fn make_fmu(
     tracing::info!("  Added: binaries/config.json");
 
     // Finalize the ZIP archive
-    zip.finish()
-        .context("Failed to finalize FMU zip archive")?;
+    zip.finish().context("Failed to finalize FMU zip archive")?;
 
     tracing::info!("Liaison FMU successfully created!");
     Ok(())
@@ -388,10 +387,11 @@ mod tests {
     }
 
     /// Helper function to create binaries directory structure
+    #[allow(dead_code)]
     fn create_binaries_dir(temp_dir: &TempDir) -> PathBuf {
         let binaries_path = temp_dir.path().join("binaries");
-        fs::create_dir_all(&binaries_path.join("x86_64-linux")).unwrap();
-        fs::create_dir_all(&binaries_path.join("x86_64-windows")).unwrap();
+        fs::create_dir_all(binaries_path.join("x86_64-linux")).unwrap();
+        fs::create_dir_all(binaries_path.join("x86_64-windows")).unwrap();
 
         // Create dummy library files
         fs::write(
@@ -409,6 +409,7 @@ mod tests {
     }
 
     /// Helper to extract and validate FMU contents
+    #[allow(dead_code)]
     fn extract_and_validate_fmu(fmu_path: &PathBuf) -> Result<TempDir> {
         let temp_dir = TempDir::new()?;
         let file = File::open(fmu_path)?;
@@ -471,7 +472,7 @@ mod tests {
     #[test]
     fn test_model_name_extraction_various_paths() {
         // Test different path formats
-        let test_cases = vec![
+        let test_cases = [
             ("model.fmu", "model"),
             ("MyModel.fmu", "MyModel"),
             ("/absolute/path/TestFMU.fmu", "TestFMU"),
@@ -539,19 +540,28 @@ mod tests {
         let mut zip = ZipWriter::new(zip_file);
 
         let result = process_tls_certificates(&mut tls_config, &mut zip);
-        assert!(result.is_ok(), "Should successfully process valid TLS files");
+        assert!(
+            result.is_ok(),
+            "Should successfully process valid TLS files"
+        );
 
         // Verify that paths were converted to filenames
         assert_eq!(
-            tls_config.get("connect_certificate").and_then(|v| v.as_str()),
+            tls_config
+                .get("connect_certificate")
+                .and_then(|v| v.as_str()),
             Some("client.crt")
         );
         assert_eq!(
-            tls_config.get("connect_private_key").and_then(|v| v.as_str()),
+            tls_config
+                .get("connect_private_key")
+                .and_then(|v| v.as_str()),
             Some("client.key")
         );
         assert_eq!(
-            tls_config.get("root_ca_certificate").and_then(|v| v.as_str()),
+            tls_config
+                .get("root_ca_certificate")
+                .and_then(|v| v.as_str()),
             Some("ca.crt")
         );
 
@@ -576,10 +586,7 @@ mod tests {
             result.is_err(),
             "Should fail when certificate file doesn't exist"
         );
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("does not exist"));
+        assert!(result.unwrap_err().to_string().contains("does not exist"));
     }
 
     #[test]
@@ -604,7 +611,9 @@ mod tests {
 
         // Empty paths should remain unchanged
         assert_eq!(
-            tls_config.get("connect_certificate").and_then(|v| v.as_str()),
+            tls_config
+                .get("connect_certificate")
+                .and_then(|v| v.as_str()),
             Some("")
         );
     }
@@ -627,7 +636,9 @@ mod tests {
         assert!(result.is_ok(), "Should handle partial TLS config");
 
         assert_eq!(
-            tls_config.get("connect_certificate").and_then(|v| v.as_str()),
+            tls_config
+                .get("connect_certificate")
+                .and_then(|v| v.as_str()),
             Some("client.crt")
         );
         zip.finish().unwrap();
@@ -644,8 +655,14 @@ mod tests {
             "name": model_name,
         });
 
-        assert_eq!(config.get("responderId").and_then(|v| v.as_str()), Some("test-responder-123"));
-        assert_eq!(config.get("name").and_then(|v| v.as_str()), Some("TestModel"));
+        assert_eq!(
+            config.get("responderId").and_then(|v| v.as_str()),
+            Some("test-responder-123")
+        );
+        assert_eq!(
+            config.get("name").and_then(|v| v.as_str()),
+            Some("TestModel")
+        );
         assert!(config.get("zenohConfig").is_none());
     }
 
@@ -668,13 +685,16 @@ mod tests {
 
         config["zenohConfig"] = zenoh_config_json.clone();
 
-        assert_eq!(config.get("responderId").and_then(|v| v.as_str()), Some("test-responder-456"));
-        assert_eq!(config.get("name").and_then(|v| v.as_str()), Some("TestModel"));
-        assert!(config.get("zenohConfig").is_some());
         assert_eq!(
-            config["zenohConfig"]["mode"].as_str(),
-            Some("client")
+            config.get("responderId").and_then(|v| v.as_str()),
+            Some("test-responder-456")
         );
+        assert_eq!(
+            config.get("name").and_then(|v| v.as_str()),
+            Some("TestModel")
+        );
+        assert!(config.get("zenohConfig").is_some());
+        assert_eq!(config["zenohConfig"]["mode"].as_str(), Some("client"));
     }
 
     #[test]
@@ -691,10 +711,7 @@ mod tests {
         }
         config["metadata"]["name"] = json!(model_name);
 
-        assert_eq!(
-            config["metadata"]["name"].as_str(),
-            Some("MyTestModel")
-        );
+        assert_eq!(config["metadata"]["name"].as_str(), Some("MyTestModel"));
     }
 
     #[test]
@@ -722,11 +739,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let nonexistent_fmu = temp_dir.path().join("nonexistent.fmu");
 
-        let result = make_fmu(
-            nonexistent_fmu,
-            "test-responder".to_string(),
-            None,
-        );
+        let result = make_fmu(nonexistent_fmu, "test-responder".to_string(), None);
 
         assert!(result.is_err(), "Should fail with nonexistent FMU");
     }
@@ -742,16 +755,15 @@ mod tests {
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
-        let result = make_fmu(
-            fmu_path,
-            "test-responder".to_string(),
-            None,
-        );
+        let result = make_fmu(fmu_path, "test-responder".to_string(), None);
 
         // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
-        assert!(result.is_err(), "Should fail when binaries directory doesn't exist");
+        assert!(
+            result.is_err(),
+            "Should fail when binaries directory doesn't exist"
+        );
         assert!(result.unwrap_err().to_string().contains("binaries"));
     }
 
@@ -791,12 +803,8 @@ mod tests {
     fn test_zenoh_config_with_tls_parsing() {
         let temp_dir = TempDir::new().unwrap();
         let (cert_path, key_path, ca_path) = create_test_certificates(&temp_dir);
-        let config_path = create_zenoh_config(
-            &temp_dir,
-            Some(&cert_path),
-            Some(&key_path),
-            Some(&ca_path),
-        );
+        let config_path =
+            create_zenoh_config(&temp_dir, Some(&cert_path), Some(&key_path), Some(&ca_path));
 
         let file = File::open(&config_path).unwrap();
         let config: Value = serde_json::from_reader(file).unwrap();

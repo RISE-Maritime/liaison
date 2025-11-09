@@ -55,6 +55,7 @@ type fmi3String = *const fmi3Char;
 type fmi3Byte = u8;
 type fmi3Binary = *const fmi3Byte;
 type fmi3Clock = i32;
+#[allow(dead_code)]
 type fmi3FMUState = *mut c_void;
 
 /// FMI 3.0 status codes
@@ -540,9 +541,9 @@ impl FmuLibrary {
         macro_rules! load_symbol {
             ($name:expr, $type:ty) => {{
                 unsafe {
-                    let symbol: Symbol<$type> = library
-                        .get($name)
-                        .with_context(|| format!("Failed to load function {:?} from FMU library", $name))?;
+                    let symbol: Symbol<$type> = library.get($name).with_context(|| {
+                        format!("Failed to load function {:?} from FMU library", $name)
+                    })?;
                     *symbol
                 }
             }};
@@ -554,7 +555,8 @@ impl FmuLibrary {
 
         // Common Functions
         let fmi3_get_version = load_symbol!(b"fmi3GetVersion\0", fmi3GetVersionType);
-        let fmi3_set_debug_logging = load_symbol!(b"fmi3SetDebugLogging\0", fmi3SetDebugLoggingType);
+        let fmi3_set_debug_logging =
+            load_symbol!(b"fmi3SetDebugLogging\0", fmi3SetDebugLoggingType);
 
         // Instantiation Functions
         let fmi3_instantiate_co_simulation = load_symbol!(
@@ -846,10 +848,7 @@ mod tests {
         let path = construct_library_path("/tmp/my_fmu_123", "Model-v2.0");
 
         #[cfg(target_os = "linux")]
-        assert_eq!(
-            path,
-            "/tmp/my_fmu_123/binaries/x86_64-linux/Model-v2.0.so"
-        );
+        assert_eq!(path, "/tmp/my_fmu_123/binaries/x86_64-linux/Model-v2.0.so");
 
         #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
         assert_eq!(
@@ -879,10 +878,7 @@ mod tests {
         assert_eq!(path, "/tmp/my fmu dir/binaries/x86_64-linux/My Model.so");
 
         #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
-        assert_eq!(
-            path,
-            "/tmp/my fmu dir/binaries/x86_64-windows/My Model.dll"
-        );
+        assert_eq!(path, "/tmp/my fmu dir/binaries/x86_64-windows/My Model.dll");
     }
 
     /// Test library path construction with absolute paths.
@@ -917,15 +913,18 @@ mod tests {
         let nonexistent_path = "/tmp/nonexistent_library_12345.so";
         let result = FmuLibrary::new(nonexistent_path);
 
-        assert!(result.is_err(), "Expected error when loading non-existent library");
+        assert!(
+            result.is_err(),
+            "Expected error when loading non-existent library"
+        );
 
         let error = result.unwrap_err();
         let error_msg = format!("{:#}", error);
 
         // Verify that the error message contains useful information
         assert!(
-            error_msg.contains("Failed to load FMU library") ||
-            error_msg.contains("nonexistent_library"),
+            error_msg.contains("Failed to load FMU library")
+                || error_msg.contains("nonexistent_library"),
             "Error message should mention the failed library load: {}",
             error_msg
         );
@@ -962,7 +961,10 @@ mod tests {
 
         let result = FmuLibrary::new(&invalid_lib_path);
 
-        assert!(result.is_err(), "Expected error when loading invalid library format");
+        assert!(
+            result.is_err(),
+            "Expected error when loading invalid library format"
+        );
 
         let error = result.unwrap_err();
         let error_msg = format!("{:#}", error);
@@ -1257,7 +1259,7 @@ fmi3Status fmi3SetClock(fmi3Instance instance, const fmi3ValueReference vr[], si
 
         // Compile the mock FMU library using gcc
         let compile_output = Command::new("gcc")
-            .args(&[
+            .args([
                 "-shared",
                 "-fPIC",
                 "-o",
@@ -1306,7 +1308,7 @@ fmi3Status fmi3SetClock(fmi3Instance instance, const fmi3ValueReference vr[], si
         write!(source_file, "{}", create_mock_fmu_source()).unwrap();
 
         let compile_output = Command::new("gcc")
-            .args(&[
+            .args([
                 "-shared",
                 "-fPIC",
                 "-o",
@@ -1330,9 +1332,18 @@ fmi3Status fmi3SetClock(fmi3Instance instance, const fmi3ValueReference vr[], si
         // Test Debug output
         let debug_output = format!("{:?}", fmu_lib);
 
-        assert!(debug_output.contains("FmuLibrary"), "Debug output should contain struct name");
-        assert!(debug_output.contains("fmi_version"), "Debug output should contain version");
-        assert!(debug_output.contains("3.0"), "Debug output should show FMI version 3.0");
+        assert!(
+            debug_output.contains("FmuLibrary"),
+            "Debug output should contain struct name"
+        );
+        assert!(
+            debug_output.contains("fmi_version"),
+            "Debug output should contain version"
+        );
+        assert!(
+            debug_output.contains("3.0"),
+            "Debug output should show FMI version 3.0"
+        );
     }
 
     // ============================================================================
@@ -1361,7 +1372,7 @@ const char* fmi3GetVersion(void) {
         write!(source_file, "{}", incomplete_source).unwrap();
 
         let compile_output = Command::new("gcc")
-            .args(&[
+            .args([
                 "-shared",
                 "-fPIC",
                 "-o",
@@ -1418,7 +1429,7 @@ const char* fmi3GetVersion(void) {
     fn test_fmi3_status_copy_clone() {
         let status1 = fmi3Status::fmi3OK;
         let status2 = status1; // Copy
-        let status3 = status1.clone(); // Clone
+        let status3 = status1; // Clone
 
         assert_eq!(status1, status2);
         assert_eq!(status1, status3);
@@ -1461,7 +1472,10 @@ const char* fmi3GetVersion(void) {
 
         // Count forward slashes
         let forward_slashes = path.matches('/').count();
-        assert!(forward_slashes >= 3, "Path should contain multiple forward slashes");
+        assert!(
+            forward_slashes >= 3,
+            "Path should contain multiple forward slashes"
+        );
 
         // Ensure no backslashes (even on Windows, we use forward slashes)
         assert!(!path.contains('\\'), "Path should not contain backslashes");

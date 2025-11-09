@@ -2,11 +2,14 @@ use anyhow::{Context, Result};
 use std::path::PathBuf;
 
 #[cfg(windows)]
+use windows::core::PCSTR;
+#[cfg(windows)]
 use windows::Win32::Foundation::MAX_PATH;
 #[cfg(windows)]
-use windows::Win32::System::LibraryLoader::{GetModuleFileNameA, GetModuleHandleExA, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT};
-#[cfg(windows)]
-use windows::core::PCSTR;
+use windows::Win32::System::LibraryLoader::{
+    GetModuleFileNameA, GetModuleHandleExA, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+};
 
 #[cfg(unix)]
 use std::ffi::c_void;
@@ -106,8 +109,7 @@ pub fn get_base_directory() -> Result<String> {
 
         // Convert C string to Rust string
         let c_str = CStr::from_ptr(dl_info.dli_fname);
-        let path_str = c_str.to_str()
-            .context("Invalid UTF-8 in library path")?;
+        let path_str = c_str.to_str().context("Invalid UTF-8 in library path")?;
 
         // Get the grandparent directory
         let library_path = PathBuf::from(path_str);
@@ -171,10 +173,13 @@ mod tests {
 
         // The path should have at least one component (not be empty)
         let path_components: Vec<_> = path.components().collect();
-        assert!(!path_components.is_empty(), "Path should have at least one component");
+        assert!(
+            !path_components.is_empty(),
+            "Path should have at least one component"
+        );
 
         // The path should be a valid directory path
-        assert!(path.as_os_str().len() > 0, "Path should not be empty");
+        assert!(!path.as_os_str().is_empty(), "Path should not be empty");
     }
 
     #[test]

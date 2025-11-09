@@ -58,8 +58,14 @@ mod tests {
     #[test]
     fn test_proto_to_fmi_status_all_values() {
         assert_eq!(fmi3Status::from(ProtoStatus::Ok), fmi3Status::fmi3OK);
-        assert_eq!(fmi3Status::from(ProtoStatus::Warning), fmi3Status::fmi3Warning);
-        assert_eq!(fmi3Status::from(ProtoStatus::Discard), fmi3Status::fmi3Discard);
+        assert_eq!(
+            fmi3Status::from(ProtoStatus::Warning),
+            fmi3Status::fmi3Warning
+        );
+        assert_eq!(
+            fmi3Status::from(ProtoStatus::Discard),
+            fmi3Status::fmi3Discard
+        );
         assert_eq!(fmi3Status::from(ProtoStatus::Error), fmi3Status::fmi3Error);
         assert_eq!(fmi3Status::from(ProtoStatus::Fatal), fmi3Status::fmi3Fatal);
     }
@@ -115,8 +121,14 @@ mod tests {
     #[test]
     fn test_fmi_to_proto_status_all_values() {
         assert_eq!(ProtoStatus::from(fmi3Status::fmi3OK), ProtoStatus::Ok);
-        assert_eq!(ProtoStatus::from(fmi3Status::fmi3Warning), ProtoStatus::Warning);
-        assert_eq!(ProtoStatus::from(fmi3Status::fmi3Discard), ProtoStatus::Discard);
+        assert_eq!(
+            ProtoStatus::from(fmi3Status::fmi3Warning),
+            ProtoStatus::Warning
+        );
+        assert_eq!(
+            ProtoStatus::from(fmi3Status::fmi3Discard),
+            ProtoStatus::Discard
+        );
         assert_eq!(ProtoStatus::from(fmi3Status::fmi3Error), ProtoStatus::Error);
         assert_eq!(ProtoStatus::from(fmi3Status::fmi3Fatal), ProtoStatus::Fatal);
     }
@@ -341,7 +353,7 @@ mod tests {
         let status = fmi3Status::fmi3OK;
 
         // Test Clone
-        let cloned = status.clone();
+        let cloned = status;
         assert_eq!(status, cloned);
 
         // Test Copy (implicit through Clone)
@@ -380,7 +392,10 @@ mod tests {
         for _ in 0..100 {
             assert_eq!(fmi3Status::from(0), fmi3Status::fmi3OK);
             assert_eq!(fmi3Status::from(ProtoStatus::Error), fmi3Status::fmi3Error);
-            assert_eq!(ProtoStatus::from(fmi3Status::fmi3Warning), ProtoStatus::Warning);
+            assert_eq!(
+                ProtoStatus::from(fmi3Status::fmi3Warning),
+                ProtoStatus::Warning
+            );
         }
     }
 
@@ -388,8 +403,8 @@ mod tests {
     #[test]
     fn test_comprehensive_conversion_coverage() {
         // Test all valid i32 values
-        let valid_i32_values = vec![0, 1, 2, 3, 4];
-        let expected_fmi = vec![
+        let valid_i32_values = [0, 1, 2, 3, 4];
+        let expected_fmi = [
             fmi3Status::fmi3OK,
             fmi3Status::fmi3Warning,
             fmi3Status::fmi3Discard,
@@ -402,7 +417,7 @@ mod tests {
         }
 
         // Test all invalid i32 values default to Error
-        let invalid_i32_values = vec![-1, 5, 10, 100, 1000];
+        let invalid_i32_values = [-1, 5, 10, 100, 1000];
         for invalid_val in invalid_i32_values {
             assert_eq!(fmi3Status::from(invalid_val), fmi3Status::fmi3Error);
         }

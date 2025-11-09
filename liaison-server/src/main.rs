@@ -92,13 +92,7 @@ fn main() -> Result<()> {
                 info!("Python environment: {:?}", py_env);
             }
 
-            server::start_server(
-                fmu_path,
-                responder_id,
-                zenoh_config,
-                python_env,
-                debug,
-            )?;
+            server::start_server(fmu_path, responder_id, zenoh_config, python_env, debug)?;
         }
 
         Commands::MakeFmu {
@@ -118,11 +112,7 @@ fn main() -> Result<()> {
                 info!("Zenoh config: {:?}", config);
             }
 
-            fmu_creator::make_fmu(
-                fmu_path,
-                responder_id,
-                zenoh_config,
-            )?;
+            fmu_creator::make_fmu(fmu_path, responder_id, zenoh_config)?;
         }
     }
 
@@ -130,7 +120,7 @@ fn main() -> Result<()> {
 }
 
 fn init_logging(debug: bool) {
-    use tracing_subscriber::{EnvFilter, fmt};
+    use tracing_subscriber::{fmt, EnvFilter};
 
     let filter = if debug {
         EnvFilter::new("debug")
@@ -138,8 +128,5 @@ fn init_logging(debug: bool) {
         EnvFilter::new("info")
     };
 
-    fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .init();
+    fmt().with_env_filter(filter).with_target(false).init();
 }

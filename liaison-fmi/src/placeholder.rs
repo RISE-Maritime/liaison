@@ -54,16 +54,15 @@ impl Placeholder {
         log_message: fmi3LogMessageCallback,
     ) -> Result<Self> {
         // Get base directory (parent of parent of the shared library)
-        let base_directory = get_base_directory()
-            .context("Failed to get base directory")?;
+        let base_directory = get_base_directory().context("Failed to get base directory")?;
 
         // Load and parse config.json
         let config_file_path = format!("{}/config.json", base_directory);
         let config_content = std::fs::read_to_string(&config_file_path)
             .with_context(|| format!("Failed to open config file at: {}", config_file_path))?;
 
-        let config: JsonValue = serde_json::from_str(&config_content)
-            .context("Failed to parse config.json")?;
+        let config: JsonValue =
+            serde_json::from_str(&config_content).context("Failed to parse config.json")?;
 
         // Extract responder ID
         let responder_id = config["responderId"]
@@ -81,7 +80,8 @@ impl Placeholder {
                     if let Some(tls) = link.get_mut("tls") {
                         if let Some(cert) = tls.get_mut("connect_certificate") {
                             if let Some(cert_str) = cert.as_str() {
-                                *cert = JsonValue::String(format!("{}/{}", base_directory, cert_str));
+                                *cert =
+                                    JsonValue::String(format!("{}/{}", base_directory, cert_str));
                             }
                         }
                         if let Some(key) = tls.get_mut("connect_private_key") {
@@ -148,7 +148,8 @@ impl Placeholder {
             .map_err(|e| anyhow::anyhow!("Failed to create key expression {}: {:?}", expr, e))?;
 
         // Create subscriber with callback
-        let subscriber = self.session
+        let subscriber = self
+            .session
             .declare_subscriber(&key_expr)
             .callback(move |sample| {
                 // Parse the protobuf message
@@ -167,7 +168,8 @@ impl Placeholder {
                         // Call the log message callback if it exists
                         if let Some(callback) = log_message_callback {
                             // Convert back to pointer
-                            let instance_environment = instance_environment_addr as fmi3InstanceEnvironment;
+                            let instance_environment =
+                                instance_environment_addr as fmi3InstanceEnvironment;
                             callback(
                                 instance_environment,
                                 status,
@@ -206,7 +208,8 @@ impl Placeholder {
     ) -> Result<O> {
         // Serialize input to wire format
         let mut input_wire = Vec::with_capacity(input.encoded_len());
-        input.encode(&mut input_wire)
+        input
+            .encode(&mut input_wire)
             .context("Failed to serialize input message")?;
 
         // Construct the key expression
@@ -215,7 +218,8 @@ impl Placeholder {
             .map_err(|e| anyhow::anyhow!("Failed to create key expression {}: {:?}", expr, e))?;
 
         // Create query with payload
-        let replies = self.session
+        let replies = self
+            .session
             .get(&key_expr)
             .payload(input_wire)
             .wait()
@@ -251,10 +255,9 @@ impl Placeholder {
     fn log_error(&self, function_name: &str, message: &str) {
         let full_message = format!("Exception in {}: {}", function_name, message);
 
-        if let (Ok(category_cstr), Ok(message_cstr)) = (
-            CString::new("Zenoh"),
-            CString::new(full_message),
-        ) {
+        if let (Ok(category_cstr), Ok(message_cstr)) =
+            (CString::new("Zenoh"), CString::new(full_message))
+        {
             if let Some(callback) = self.log_message {
                 callback(
                     self.instance_environment,
@@ -303,10 +306,10 @@ mod tests {
     //! the logic components that can be tested in isolation.
 
     use super::*;
+    use std::fs;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Mutex;
     use tempfile::TempDir;
-    use std::fs;
 
     // Test helper: Create a temporary directory with a valid config.json
     fn create_test_config(
@@ -428,13 +431,9 @@ mod tests {
         fs::write(&config_path, config_content).expect("Failed to write config");
 
         let content = fs::read_to_string(&config_path).expect("Failed to read config");
-        let config: JsonValue =
-            serde_json::from_str(&content).expect("Failed to parse config");
+        let config: JsonValue = serde_json::from_str(&content).expect("Failed to parse config");
 
-        assert_eq!(
-            config["responderId"].as_str(),
-            Some("test-responder-123")
-        );
+        assert_eq!(config["responderId"].as_str(), Some("test-responder-123"));
     }
 
     #[test]
@@ -460,8 +459,7 @@ mod tests {
         fs::write(&config_path, config_content).expect("Failed to write config");
 
         let content = fs::read_to_string(&config_path).expect("Failed to read config");
-        let config: JsonValue =
-            serde_json::from_str(&content).expect("Failed to parse config");
+        let config: JsonValue = serde_json::from_str(&content).expect("Failed to parse config");
 
         assert!(
             config["responderId"].is_null(),
@@ -486,8 +484,7 @@ mod tests {
         fs::write(&config_path, config_content).expect("Failed to write config");
 
         let content = fs::read_to_string(&config_path).expect("Failed to read config");
-        let config: JsonValue =
-            serde_json::from_str(&content).expect("Failed to parse config");
+        let config: JsonValue = serde_json::from_str(&content).expect("Failed to parse config");
 
         assert!(
             config.get("zenohConfig").is_some(),
@@ -567,8 +564,8 @@ mod tests {
         assert!(!buffer.is_empty(), "Encoded buffer should not be empty");
 
         // Deserialize
-        let decoded = proto::LogMessage::decode(buffer.as_slice())
-            .expect("Failed to decode LogMessage");
+        let decoded =
+            proto::LogMessage::decode(buffer.as_slice()).expect("Failed to decode LogMessage");
 
         assert_eq!(decoded.status, proto::Status::Warning as i32);
         assert_eq!(decoded.category, "TestCategory");
@@ -616,9 +613,7 @@ mod tests {
         assert!(encoded_len > 0, "Encoded length should be positive");
 
         let mut buffer = Vec::with_capacity(encoded_len);
-        instance_msg
-            .encode(&mut buffer)
-            .expect("Failed to encode");
+        instance_msg.encode(&mut buffer).expect("Failed to encode");
 
         assert_eq!(
             buffer.len(),
@@ -663,10 +658,7 @@ mod tests {
         assert!(valid.is_ok());
 
         let with_null = CString::new("String\0with null");
-        assert!(
-            with_null.is_err(),
-            "CString with interior null should fail"
-        );
+        assert!(with_null.is_err(), "CString with interior null should fail");
 
         let empty = CString::new("");
         assert!(empty.is_ok(), "Empty CString should be valid");
@@ -679,10 +671,7 @@ mod tests {
         let error_detail = "Connection timeout";
         let full_message = format!("Exception in {}: {}", function_name, error_detail);
 
-        assert_eq!(
-            full_message,
-            "Exception in fmi3DoStep: Connection timeout"
-        );
+        assert_eq!(full_message, "Exception in fmi3DoStep: Connection timeout");
     }
 
     #[test]
@@ -782,8 +771,7 @@ mod tests {
         let mut buffer = Vec::new();
         log_msg.encode(&mut buffer).expect("Failed to encode");
 
-        let decoded = proto::LogMessage::decode(buffer.as_slice())
-            .expect("Failed to decode");
+        let decoded = proto::LogMessage::decode(buffer.as_slice()).expect("Failed to decode");
 
         assert_eq!(decoded.category, "Test/Category");
         assert_eq!(decoded.message, "Error: \"quoted\" text with\nnewline");
@@ -796,7 +784,10 @@ mod tests {
         let config_path = temp_dir.path().join("nonexistent.json");
 
         let result = fs::read_to_string(&config_path);
-        assert!(result.is_err(), "Should fail when config file doesn't exist");
+        assert!(
+            result.is_err(),
+            "Should fail when config file doesn't exist"
+        );
     }
 
     #[test]
@@ -851,8 +842,7 @@ mod tests {
         let mut buffer = Vec::new();
         log_msg.encode(&mut buffer).expect("Failed to encode");
 
-        let decoded = proto::LogMessage::decode(buffer.as_slice())
-            .expect("Failed to decode");
+        let decoded = proto::LogMessage::decode(buffer.as_slice()).expect("Failed to decode");
 
         assert_eq!(decoded.category, "");
         assert_eq!(decoded.message, "");

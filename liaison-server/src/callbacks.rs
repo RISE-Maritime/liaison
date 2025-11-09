@@ -7,7 +7,7 @@
 
 use crate::fmu_loader::fmi3Status;
 use crate::proto::Status as ProtoStatus;
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::{c_char, c_void, CStr};
 use tracing::{error, info, warn};
 
 // FMI 3.0 types (matching liaison-fmi definitions)
@@ -35,9 +35,7 @@ impl CallbackContext {
     /// # Returns
     /// A new CallbackContext instance
     pub fn new() -> Self {
-        CallbackContext {
-            _log_publisher: (),
-        }
+        CallbackContext { _log_publisher: () }
     }
 }
 
@@ -76,17 +74,13 @@ pub unsafe extern "C" fn fmi3_log_message(
     let category_str = if category.is_null() {
         String::from("(null)")
     } else {
-        CStr::from_ptr(category)
-            .to_string_lossy()
-            .into_owned()
+        CStr::from_ptr(category).to_string_lossy().into_owned()
     };
 
     let message_str = if message.is_null() {
         String::from("(null)")
     } else {
-        CStr::from_ptr(message)
-            .to_string_lossy()
-            .into_owned()
+        CStr::from_ptr(message).to_string_lossy().into_owned()
     };
 
     // Log the message using tracing at the appropriate level
@@ -178,12 +172,18 @@ mod tests {
 
     #[test]
     fn test_status_to_proto_warning() {
-        assert_eq!(status_to_proto(fmi3Status::fmi3Warning), ProtoStatus::Warning);
+        assert_eq!(
+            status_to_proto(fmi3Status::fmi3Warning),
+            ProtoStatus::Warning
+        );
     }
 
     #[test]
     fn test_status_to_proto_discard() {
-        assert_eq!(status_to_proto(fmi3Status::fmi3Discard), ProtoStatus::Discard);
+        assert_eq!(
+            status_to_proto(fmi3Status::fmi3Discard),
+            ProtoStatus::Discard
+        );
     }
 
     #[test]
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn test_status_to_proto_all_variants() {
         // Comprehensive test covering all status variants
-        let test_cases = vec![
+        let test_cases = [
             (fmi3Status::fmi3OK, ProtoStatus::Ok),
             (fmi3Status::fmi3Warning, ProtoStatus::Warning),
             (fmi3Status::fmi3Discard, ProtoStatus::Discard),
@@ -513,7 +513,7 @@ mod tests {
     #[test]
     fn test_fmi3_log_message_realistic_fmu_messages() {
         // Test with realistic FMU log message patterns
-        let test_cases = vec![
+        let test_cases = [
             ("logStatusOK", "fmi3EnterInitializationMode: succeeded"),
             ("logStatusWarning", "Time step too large, reducing to 0.001"),
             ("logEvent", "Event detected at time 1.234"),
@@ -539,7 +539,7 @@ mod tests {
     #[test]
     fn test_fmi3_log_message_error_scenarios() {
         // Test various error scenarios that an FMU might report
-        let error_messages = vec![
+        let error_messages = [
             "Division by zero detected",
             "Matrix is singular, cannot invert",
             "Maximum iteration count exceeded",

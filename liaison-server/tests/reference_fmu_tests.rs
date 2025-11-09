@@ -68,10 +68,8 @@ impl FmuTestFixture {
         let linux_dir = self.binaries_dir.join("x86_64-linux");
         let windows_dir = self.binaries_dir.join("x86_64-windows");
 
-        fs::create_dir_all(&linux_dir)
-            .context("Failed to create Linux binaries directory")?;
-        fs::create_dir_all(&windows_dir)
-            .context("Failed to create Windows binaries directory")?;
+        fs::create_dir_all(&linux_dir).context("Failed to create Linux binaries directory")?;
+        fs::create_dir_all(&windows_dir).context("Failed to create Windows binaries directory")?;
 
         // Copy the built liaison FMU library to the binaries directory
         let source_lib = self.workspace_dir.join("target/release/libliaisonfmu.so");
@@ -150,13 +148,13 @@ impl FmuTestFixture {
             .and_then(|s| s.to_str())
             .ok_or_else(|| anyhow::anyhow!("Failed to extract model name"))?;
 
-        let output_fmu = self.temp_dir.path().join(format!("{}Liaison.fmu", model_name));
+        let output_fmu = self
+            .temp_dir
+            .path()
+            .join(format!("{}Liaison.fmu", model_name));
 
         if !output_fmu.exists() {
-            anyhow::bail!(
-                "Expected output FMU not found at: {}",
-                output_fmu.display()
-            );
+            anyhow::bail!("Expected output FMU not found at: {}", output_fmu.display());
         }
 
         Ok(output_fmu)
@@ -186,9 +184,7 @@ impl FmuTestFixture {
 #[test]
 fn test_create_liaison_fmu_basic() -> Result<()> {
     // Initialize tracing for test output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
 
     let fixture = FmuTestFixture::new()?;
     fixture.setup_binaries()?;
@@ -216,10 +212,7 @@ fn test_create_liaison_fmu_basic() -> Result<()> {
     // Verify it's a valid ZIP file
     let fmu_file = File::open(&output_fmu)?;
     let archive = ZipArchive::new(fmu_file);
-    assert!(
-        archive.is_ok(),
-        "Output FMU should be a valid ZIP archive"
-    );
+    assert!(archive.is_ok(), "Output FMU should be a valid ZIP archive");
 
     tracing::info!("Successfully created Liaison FMU: {}", output_fmu.display());
 
@@ -229,9 +222,7 @@ fn test_create_liaison_fmu_basic() -> Result<()> {
 #[test]
 fn test_liaison_fmu_structure() -> Result<()> {
     // Initialize tracing for test output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
 
     let fixture = FmuTestFixture::new()?;
     fixture.setup_binaries()?;
@@ -275,9 +266,7 @@ fn test_liaison_fmu_structure() -> Result<()> {
 #[test]
 fn test_model_description_copied_correctly() -> Result<()> {
     // Initialize tracing for test output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
 
     let fixture = FmuTestFixture::new()?;
     fixture.setup_binaries()?;
@@ -296,8 +285,7 @@ fn test_model_description_copied_correctly() -> Result<()> {
     let source_extract_dir = fixture.extract_fmu(&source_fmu)?;
     let source_model_desc_path = source_extract_dir.join("modelDescription.xml");
     let mut source_model_desc = String::new();
-    File::open(&source_model_desc_path)?
-        .read_to_string(&mut source_model_desc)?;
+    File::open(&source_model_desc_path)?.read_to_string(&mut source_model_desc)?;
 
     // Create the Liaison FMU
     let output_fmu = fixture.make_fmu(&source_fmu, "test-model-desc", None)?;
@@ -306,8 +294,7 @@ fn test_model_description_copied_correctly() -> Result<()> {
     let output_extract_dir = fixture.extract_fmu(&output_fmu)?;
     let output_model_desc_path = output_extract_dir.join("modelDescription.xml");
     let mut output_model_desc = String::new();
-    File::open(&output_model_desc_path)?
-        .read_to_string(&mut output_model_desc)?;
+    File::open(&output_model_desc_path)?.read_to_string(&mut output_model_desc)?;
 
     // Verify modelDescription.xml was copied correctly
     assert_eq!(
@@ -333,9 +320,7 @@ fn test_model_description_copied_correctly() -> Result<()> {
 #[test]
 fn test_config_json_embedded_correctly() -> Result<()> {
     // Initialize tracing for test output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
 
     let fixture = FmuTestFixture::new()?;
     fixture.setup_binaries()?;
@@ -360,16 +345,13 @@ fn test_config_json_embedded_correctly() -> Result<()> {
     let config_path = extract_dir.join("binaries/config.json");
 
     // Read and parse config.json
-    let config_content = fs::read_to_string(&config_path)
-        .context("Failed to read config.json from FMU")?;
-    let config: serde_json::Value = serde_json::from_str(&config_content)
-        .context("Failed to parse config.json")?;
+    let config_content =
+        fs::read_to_string(&config_path).context("Failed to read config.json from FMU")?;
+    let config: serde_json::Value =
+        serde_json::from_str(&config_content).context("Failed to parse config.json")?;
 
     // Verify config.json structure
-    assert!(
-        config.is_object(),
-        "config.json should be a JSON object"
-    );
+    assert!(config.is_object(), "config.json should be a JSON object");
 
     // Verify responderId is correct
     let responder_id_value = config
@@ -401,9 +383,7 @@ fn test_config_json_embedded_correctly() -> Result<()> {
 #[test]
 fn test_liaison_library_included_in_fmu() -> Result<()> {
     // Initialize tracing for test output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
 
     let fixture = FmuTestFixture::new()?;
     fixture.setup_binaries()?;
@@ -450,8 +430,7 @@ fn test_liaison_library_included_in_fmu() -> Result<()> {
     lib_file.read_exact(&mut magic)?;
 
     assert_eq!(
-        &magic,
-        b"\x7fELF",
+        &magic, b"\x7fELF",
         "Library should be a valid ELF file (Linux shared library)"
     );
 
@@ -463,9 +442,7 @@ fn test_liaison_library_included_in_fmu() -> Result<()> {
 #[test]
 fn test_liaison_fmu_with_zenoh_config() -> Result<()> {
     // Initialize tracing for test output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
 
     let fixture = FmuTestFixture::new()?;
     fixture.setup_binaries()?;
@@ -542,9 +519,7 @@ fn test_liaison_fmu_with_zenoh_config() -> Result<()> {
 #[test]
 fn test_multiple_fmu_creation() -> Result<()> {
     // Initialize tracing for test output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
 
     let fixture = FmuTestFixture::new()?;
     fixture.setup_binaries()?;
@@ -580,9 +555,7 @@ fn test_multiple_fmu_creation() -> Result<()> {
 #[test]
 fn test_fmu_zip_structure_integrity() -> Result<()> {
     // Initialize tracing for test output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("info").try_init();
 
     let fixture = FmuTestFixture::new()?;
     fixture.setup_binaries()?;

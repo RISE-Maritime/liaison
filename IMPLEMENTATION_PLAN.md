@@ -66,14 +66,14 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
 - [ ] 6.4 Performance comparison with C++ version
 
 ### Phase 7: Build System & Documentation
-- [ ] 7.1 Set up GitHub Actions for CI/CD
+- [x] 7.1 Set up GitHub Actions for CI/CD - COMPLETED
 - [ ] 7.2 Update README with Rust build instructions
 - [ ] 7.3 Create migration guide
 
 ## Current Status
-**Phase:** 6 - Testing & Validation (COMPLETED)
-**Last Updated:** 2025-11-08 (Reference FMU testing completed)
-**Next Step:** Phase 7.1 - Set up GitHub Actions for CI/CD
+**Phase:** 7 - Build System & Documentation (IN PROGRESS)
+**Last Updated:** 2025-11-09 (GitHub Actions CI/CD completed)
+**Next Step:** Phase 7.2 - Update README with Rust build instructions
 
 ## Completed Work
 
@@ -299,6 +299,44 @@ This document tracks the progress of porting the Liaison FMI library from C++ to
   - libliaisonfmu.so: 13MB (release)
   - Both compile with zero errors
   - Manual testing confirms FMU creation works correctly
+
+### Phase 7 Achievements
+- **GitHub Actions CI/CD** (`.github/workflows/rust-ci.yml`): Comprehensive automated build and test pipeline:
+  - **Check Job**: Runs on every push and PR
+    - Code formatting validation with `cargo fmt --check`
+    - Linting with `cargo clippy` (configured to treat warnings as errors with FMI-specific exceptions)
+    - Compilation check for all targets and features
+    - Protobuf compiler (protoc) installation
+    - Cargo caching for faster builds (registry, index, build artifacts)
+  - **Test Jobs**: Parallel testing on Linux and Windows
+    - Linux: Ubuntu latest with full test suite
+    - Windows: Windows latest with full test suite
+    - Both run unit tests and doc tests
+    - Depends on check job passing first
+  - **Build Jobs**: Release builds for both platforms (on main branch or releases)
+    - Linux: Builds liaison-server binary and libliaisonfmu.so
+    - Windows: Builds liaison-server.exe and liaisonfmu.dll
+    - Artifacts uploaded for each platform
+    - Only runs if all tests pass
+  - **Release Job**: Automated release packaging
+    - Downloads artifacts from both platforms
+    - Creates cross-platform packages (Linux .tar.gz, Windows .zip)
+    - Includes both server binaries and FMI libraries for both platforms
+    - Automatically uploads to GitHub releases
+  - **Configuration**:
+    - Rust backtrace enabled for better debugging
+    - Color output for better readability
+    - LTO and optimization enabled in release profile
+    - Triggers on push to main/port-to-rust branches and all PRs
+- **Build System Improvements**:
+  - Workspace-level dependency management for consistency
+  - Release profile optimized for size and performance (LTO, strip, opt-level 3)
+  - Cross-platform support verified through CI
+- **Quality Assurance**:
+  - All code must pass formatting checks
+  - All clippy warnings treated as errors (with necessary FMI exceptions)
+  - Tests must pass on both Linux and Windows before merging
+  - Automated release artifact generation
 
 ## Notes
 - Maintain C ABI compatibility for the client library (cdylib)

@@ -39,7 +39,9 @@
 //! - FreeInstance: lines 475-495
 
 use crate::callbacks::{fmi3_log_message, status_to_proto};
-use crate::fmu_loader::{fmi3Status, FmuLibrary};
+use crate::fmu_loader::FmuLibrary;
+#[cfg(test)]
+use crate::fmu_loader::fmi3Status;
 use crate::instance_manager::InstanceManager;
 use crate::proto;
 use anyhow::{Context, Result};
@@ -68,14 +70,11 @@ use zenoh::Wait;
 /// let input: proto::Fmi3InstanceMessage = parse_query_payload(&query)?;
 /// ```
 fn parse_query_payload<T: Message + Default>(query: &Query) -> Result<T> {
-    let payload = query
-        .payload()
-        .context("Query has no payload")?;
+    let payload = query.payload().context("Query has no payload")?;
 
     let bytes = payload.to_bytes();
 
-    T::decode(bytes.as_ref())
-        .context("Failed to decode protobuf message from query payload")
+    T::decode(bytes.as_ref()).context("Failed to decode protobuf message from query payload")
 }
 
 /// Helper function to serialize protobuf message and reply to query
@@ -99,7 +98,8 @@ fn parse_query_payload<T: Message + Default>(query: &Query) -> Result<T> {
 /// ```
 fn serialize_and_reply<T: Message>(query: &Query, message: &T) -> Result<()> {
     let mut buf = Vec::with_capacity(message.encoded_len());
-    message.encode(&mut buf)
+    message
+        .encode(&mut buf)
         .context("Failed to encode protobuf message")?;
 
     query
@@ -168,10 +168,7 @@ pub fn handle_set_debug_logging(
         .collect::<std::result::Result<Vec<_>, _>>()
         .context("Failed to convert categories to C strings")?;
 
-    let category_ptrs: Vec<*const i8> = c_categories
-        .iter()
-        .map(|cs| cs.as_ptr())
-        .collect();
+    let category_ptrs: Vec<*const i8> = c_categories.iter().map(|cs| cs.as_ptr()).collect();
 
     // Call FMU function
     let status = (fmu.fmi3_set_debug_logging)(
@@ -183,15 +180,12 @@ pub fn handle_set_debug_logging(
 
     // Create response
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
 
-    info!(
-        "fmi3SetDebugLogging completed with status: {:?}",
-        status
-    );
+    info!("fmi3SetDebugLogging completed with status: {:?}", status);
 
     Ok(())
 }
@@ -249,12 +243,11 @@ pub fn handle_instantiate_co_simulation(
     let input: proto::Fmi3InstantiateCoSimulationMessage = parse_query_payload(&query)?;
 
     // Convert strings to C strings
-    let instance_name = CString::new(input.instance_name.as_str())
-        .context("Failed to convert instance_name")?;
+    let instance_name =
+        CString::new(input.instance_name.as_str()).context("Failed to convert instance_name")?;
     let instantiation_token = CString::new(input.instantiation_token.as_str())
         .context("Failed to convert instantiation_token")?;
-    let resource_path_c = CString::new(resource_path)
-        .context("Failed to convert resource_path")?;
+    let resource_path_c = CString::new(resource_path).context("Failed to convert resource_path")?;
 
     // Convert required intermediate variables
     let required_intermediate_variables: Vec<u32> = input
@@ -274,7 +267,7 @@ pub fn handle_instantiate_co_simulation(
         input.early_return_allowed as i32,
         required_intermediate_variables.as_ptr(),
         input.n_required_intermediate_variables as usize,
-        std::ptr::null_mut(),  // instance_environment
+        std::ptr::null_mut(),   // instance_environment
         Some(fmi3_log_message), // log_message callback
         None,                   // intermediate_update callback
     );
@@ -289,9 +282,7 @@ pub fn handle_instantiate_co_simulation(
     let instance_index = instance_manager.add_instance(instance);
 
     // Create response
-    let output = proto::Fmi3InstanceMessage {
-        instance_index,
-    };
+    let output = proto::Fmi3InstanceMessage { instance_index };
 
     serialize_and_reply(&query, &output)?;
 
@@ -342,12 +333,11 @@ pub fn handle_instantiate_model_exchange(
     let input: proto::Fmi3InstantiateModelExchangeMessage = parse_query_payload(&query)?;
 
     // Convert strings to C strings
-    let instance_name = CString::new(input.instance_name.as_str())
-        .context("Failed to convert instance_name")?;
+    let instance_name =
+        CString::new(input.instance_name.as_str()).context("Failed to convert instance_name")?;
     let instantiation_token = CString::new(input.instantiation_token.as_str())
         .context("Failed to convert instantiation_token")?;
-    let resource_path_c = CString::new(resource_path)
-        .context("Failed to convert resource_path")?;
+    let resource_path_c = CString::new(resource_path).context("Failed to convert resource_path")?;
 
     // Call FMU function
     let instance = (fmu.fmi3_instantiate_model_exchange)(
@@ -356,7 +346,7 @@ pub fn handle_instantiate_model_exchange(
         resource_path_c.as_ptr(),
         input.visible as i32,
         input.logging_on as i32,
-        std::ptr::null_mut(),  // instance_environment
+        std::ptr::null_mut(),   // instance_environment
         Some(fmi3_log_message), // log_message callback
     );
 
@@ -370,9 +360,7 @@ pub fn handle_instantiate_model_exchange(
     let instance_index = instance_manager.add_instance(instance);
 
     // Create response
-    let output = proto::Fmi3InstanceMessage {
-        instance_index,
-    };
+    let output = proto::Fmi3InstanceMessage { instance_index };
 
     serialize_and_reply(&query, &output)?;
 
@@ -426,12 +414,11 @@ pub fn handle_instantiate_scheduled_execution(
     let input: proto::Fmi3InstantiateScheduledExecutionMessage = parse_query_payload(&query)?;
 
     // Convert strings to C strings
-    let instance_name = CString::new(input.instance_name.as_str())
-        .context("Failed to convert instance_name")?;
+    let instance_name =
+        CString::new(input.instance_name.as_str()).context("Failed to convert instance_name")?;
     let instantiation_token = CString::new(input.instantiation_token.as_str())
         .context("Failed to convert instantiation_token")?;
-    let resource_path_c = CString::new(resource_path)
-        .context("Failed to convert resource_path")?;
+    let resource_path_c = CString::new(resource_path).context("Failed to convert resource_path")?;
 
     // Call FMU function
     let instance = (fmu.fmi3_instantiate_scheduled_execution)(
@@ -440,7 +427,7 @@ pub fn handle_instantiate_scheduled_execution(
         resource_path_c.as_ptr(),
         input.visible as i32,
         input.logging_on as i32,
-        std::ptr::null_mut(),  // instance_environment
+        std::ptr::null_mut(),   // instance_environment
         Some(fmi3_log_message), // log_message callback
         None,                   // clock_update callback
         None,                   // lock_preemption callback
@@ -457,9 +444,7 @@ pub fn handle_instantiate_scheduled_execution(
     let instance_index = instance_manager.add_instance(instance);
 
     // Create response
-    let output = proto::Fmi3InstanceMessage {
-        instance_index,
-    };
+    let output = proto::Fmi3InstanceMessage { instance_index };
 
     serialize_and_reply(&query, &output)?;
 
@@ -522,7 +507,7 @@ pub fn handle_enter_initialization_mode(
 
     // Create response
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -572,7 +557,7 @@ pub fn handle_exit_initialization_mode(
 
     // Create response
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -623,7 +608,7 @@ pub fn handle_enter_event_mode(
 
     // Create response
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -712,7 +697,10 @@ pub fn handle_free_instance(
 
     serialize_and_reply(&query, &output)?;
 
-    info!("fmi3FreeInstance completed for instance {}", input.instance_index);
+    info!(
+        "fmi3FreeInstance completed for instance {}",
+        input.instance_index
+    );
 
     Ok(())
 }
@@ -759,15 +747,12 @@ pub fn handle_terminate(
 
     // Create response
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
 
-    info!(
-        "fmi3Terminate completed with status: {:?}",
-        status
-    );
+    info!("fmi3Terminate completed with status: {:?}", status);
 
     Ok(())
 }
@@ -810,15 +795,12 @@ pub fn handle_reset(
 
     // Create response
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
 
-    info!(
-        "fmi3Reset completed with status: {:?}",
-        status
-    );
+    info!("fmi3Reset completed with status: {:?}", status);
 
     Ok(())
 }
@@ -894,15 +876,12 @@ pub fn handle_do_step(
 
     // Create response
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
 
-    info!(
-        "fmi3DoStep completed with status: {:?}",
-        status
-    );
+    info!("fmi3DoStep completed with status: {:?}", status);
 
     Ok(())
 }
@@ -952,11 +931,8 @@ macro_rules! impl_get_value_handler {
                 .context("Failed to get instance")?;
 
             // Extract value references
-            let value_references: Vec<u32> = input
-                .value_references
-                .iter()
-                .map(|&vr| vr as u32)
-                .collect();
+            let value_references: Vec<u32> =
+                input.value_references.iter().map(|&vr| vr as u32).collect();
 
             // Prepare output buffer
             let n_values = input.n_value_references as usize;
@@ -979,12 +955,15 @@ macro_rules! impl_get_value_handler {
             let output = proto::$proto_output {
                 values: proto_values,
                 n_values: n_values_out as i32,
-                status: status_to_proto(status) as i32,
+                status: status_to_proto(status).into(),
             };
 
             serialize_and_reply(&query, &output)?;
 
-            info!(concat!("fmi3Get", $type_name, " completed with status: {:?}"), status);
+            info!(
+                concat!("fmi3Get", $type_name, " completed with status: {:?}"),
+                status
+            );
 
             Ok(())
         }
@@ -1030,11 +1009,8 @@ macro_rules! impl_set_value_handler {
                 .context("Failed to get instance")?;
 
             // Extract value references
-            let value_references: Vec<u32> = input
-                .value_references
-                .iter()
-                .map(|&vr| vr as u32)
-                .collect();
+            let value_references: Vec<u32> =
+                input.value_references.iter().map(|&vr| vr as u32).collect();
 
             // Convert values from proto type to FMI type
             let values: Vec<$rust_type> = input.values.iter().map(|&v| v as $rust_type).collect();
@@ -1050,12 +1026,15 @@ macro_rules! impl_set_value_handler {
 
             // Create output
             let output = proto::Fmi3StatusMessage {
-                status: status_to_proto(status) as i32,
+                status: status_to_proto(status).into(),
             };
 
             serialize_and_reply(&query, &output)?;
 
-            info!(concat!("fmi3Set", $type_name, " completed with status: {:?}"), status);
+            info!(
+                concat!("fmi3Set", $type_name, " completed with status: {:?}"),
+                status
+            );
 
             Ok(())
         }
@@ -1187,11 +1166,7 @@ pub fn handle_get_boolean(
         .context("Failed to get instance")?;
 
     // Extract value references
-    let value_references: Vec<u32> = input
-        .value_references
-        .iter()
-        .map(|&vr| vr as u32)
-        .collect();
+    let value_references: Vec<u32> = input.value_references.iter().map(|&vr| vr as u32).collect();
 
     // Prepare output buffer - FMI uses i32 for boolean
     let n_values = input.n_value_references as usize;
@@ -1214,7 +1189,7 @@ pub fn handle_get_boolean(
     let output = proto::Fmi3GetBooleanOutputMessage {
         values: proto_values,
         n_values: n_values_out as i32,
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -1339,14 +1314,14 @@ pub fn handle_set_boolean(
         .context("Failed to get instance")?;
 
     // Extract value references
-    let value_references: Vec<u32> = input
-        .value_references
-        .iter()
-        .map(|&vr| vr as u32)
-        .collect();
+    let value_references: Vec<u32> = input.value_references.iter().map(|&vr| vr as u32).collect();
 
     // Convert bool values to i32 for FMI (true -> 1, false -> 0)
-    let values: Vec<i32> = input.values.iter().map(|&b| if b { 1 } else { 0 }).collect();
+    let values: Vec<i32> = input
+        .values
+        .iter()
+        .map(|&b| if b { 1 } else { 0 })
+        .collect();
 
     // Call FMU function
     let status = (fmu.fmi3_set_boolean)(
@@ -1359,7 +1334,7 @@ pub fn handle_set_boolean(
 
     // Create output
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -1401,11 +1376,7 @@ pub fn handle_get_string(
         .context("Failed to get instance")?;
 
     // Extract value references
-    let value_references: Vec<u32> = input
-        .value_references
-        .iter()
-        .map(|&vr| vr as u32)
-        .collect();
+    let value_references: Vec<u32> = input.value_references.iter().map(|&vr| vr as u32).collect();
 
     // Prepare output buffer for C string pointers
     let n_values = input.n_value_references as usize;
@@ -1438,7 +1409,7 @@ pub fn handle_get_string(
     let output = proto::Fmi3GetStringOutputMessage {
         values: rust_strings,
         n_values: n_values_out as i32,
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -1473,11 +1444,7 @@ pub fn handle_set_string(
         .context("Failed to get instance")?;
 
     // Extract value references
-    let value_references: Vec<u32> = input
-        .value_references
-        .iter()
-        .map(|&vr| vr as u32)
-        .collect();
+    let value_references: Vec<u32> = input.value_references.iter().map(|&vr| vr as u32).collect();
 
     // Convert Rust strings to C strings
     // We need to keep the CStrings alive until after the FMU call
@@ -1487,10 +1454,7 @@ pub fn handle_set_string(
         .map(|s| CString::new(s.as_str()).unwrap_or_default())
         .collect();
 
-    let c_string_ptrs: Vec<*const i8> = c_strings
-        .iter()
-        .map(|cs| cs.as_ptr())
-        .collect();
+    let c_string_ptrs: Vec<*const i8> = c_strings.iter().map(|cs| cs.as_ptr()).collect();
 
     // Call FMU function
     let status = (fmu.fmi3_set_string)(
@@ -1503,7 +1467,7 @@ pub fn handle_set_string(
 
     // Create output
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -1538,11 +1502,7 @@ pub fn handle_get_binary(
         .context("Failed to get instance")?;
 
     // Extract value references
-    let value_references: Vec<u32> = input
-        .value_references
-        .iter()
-        .map(|&vr| vr as u32)
-        .collect();
+    let value_references: Vec<u32> = input.value_references.iter().map(|&vr| vr as u32).collect();
 
     let n_value_references = input.n_value_references as usize;
 
@@ -1554,8 +1514,8 @@ pub fn handle_get_binary(
     let mut binary_ptrs: Vec<*const u8> = vec![std::ptr::null(); n_value_references];
 
     // Set up pointers to buffer segments
-    for i in 0..n_value_references {
-        binary_ptrs[i] = unsafe { binary_buffer.as_ptr().add(i * MAX_BINARY_SIZE) };
+    for (i, ptr) in binary_ptrs.iter_mut().enumerate().take(n_value_references) {
+        *ptr = unsafe { binary_buffer.as_ptr().add(i * MAX_BINARY_SIZE) };
     }
 
     let n_values_out = 0;
@@ -1583,7 +1543,7 @@ pub fn handle_get_binary(
     let output = proto::Fmi3GetBinaryOutputMessage {
         values: output_values,
         n_values: n_value_references as i32,
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -1618,11 +1578,7 @@ pub fn handle_set_binary(
         .context("Failed to get instance")?;
 
     // Extract value references
-    let value_references: Vec<u32> = input
-        .value_references
-        .iter()
-        .map(|&vr| vr as u32)
-        .collect();
+    let value_references: Vec<u32> = input.value_references.iter().map(|&vr| vr as u32).collect();
 
     let n_value_references = input.n_value_references as usize;
 
@@ -1655,7 +1611,7 @@ pub fn handle_set_binary(
 
     // Create output
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -1689,11 +1645,7 @@ pub fn handle_get_clock(
         .context("Failed to get instance")?;
 
     // Extract value references
-    let value_references: Vec<u32> = input
-        .value_references
-        .iter()
-        .map(|&vr| vr as u32)
-        .collect();
+    let value_references: Vec<u32> = input.value_references.iter().map(|&vr| vr as u32).collect();
 
     // Prepare output buffer for clock values (i32 in FMI)
     let n_values = input.n_value_references as usize;
@@ -1714,7 +1666,7 @@ pub fn handle_get_clock(
     let output = proto::Fmi3GetClockOutputMessage {
         values: bool_values,
         n_values: n_values as i32,
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -1748,14 +1700,14 @@ pub fn handle_set_clock(
         .context("Failed to get instance")?;
 
     // Extract value references
-    let value_references: Vec<u32> = input
-        .value_references
-        .iter()
-        .map(|&vr| vr as u32)
-        .collect();
+    let value_references: Vec<u32> = input.value_references.iter().map(|&vr| vr as u32).collect();
 
     // Convert bool values to i32 for FMI
-    let clock_values: Vec<i32> = input.values.iter().map(|&b| if b { 1 } else { 0 }).collect();
+    let clock_values: Vec<i32> = input
+        .values
+        .iter()
+        .map(|&b| if b { 1 } else { 0 })
+        .collect();
 
     // Call FMU function
     let status = (fmu.fmi3_set_clock)(
@@ -1767,7 +1719,7 @@ pub fn handle_set_clock(
 
     // Create output
     let output = proto::Fmi3StatusMessage {
-        status: status_to_proto(status) as i32,
+        status: status_to_proto(status).into(),
     };
 
     serialize_and_reply(&query, &output)?;
@@ -1787,10 +1739,11 @@ mod tests {
 
     /// Creates a mock FmuLibrary with stub functions for testing
     /// This allows us to test handler logic without loading a real FMU
+    #[allow(clippy::missing_transmute_annotations)]
     fn create_mock_fmu() -> FmuLibrary {
         // Mock function implementations that return predictable values
         extern "C" fn mock_get_version() -> *const i8 {
-            b"3.0\0".as_ptr() as *const i8
+            c"3.0".as_ptr()
         }
 
         extern "C" fn mock_set_debug_logging(
@@ -1813,8 +1766,23 @@ mod tests {
             _required_intermediate_variables: *const u32,
             _n_required_intermediate_variables: usize,
             _instance_environment: *mut std::ffi::c_void,
-            _log_message: Option<unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
-            _intermediate_update: Option<extern "C" fn(*mut std::ffi::c_void, f64, i32, i32, i32, i32, i32, i32, *mut i32, *mut f64)>,
+            _log_message: Option<
+                unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8),
+            >,
+            _intermediate_update: Option<
+                extern "C" fn(
+                    *mut std::ffi::c_void,
+                    f64,
+                    i32,
+                    i32,
+                    i32,
+                    i32,
+                    i32,
+                    i32,
+                    *mut i32,
+                    *mut f64,
+                ),
+            >,
         ) -> *mut std::ffi::c_void {
             // Return a non-null dummy pointer
             0x1234 as *mut std::ffi::c_void
@@ -1827,7 +1795,9 @@ mod tests {
             _visible: i32,
             _logging_on: i32,
             _instance_environment: *mut std::ffi::c_void,
-            _log_message: Option<unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
+            _log_message: Option<
+                unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8),
+            >,
         ) -> *mut std::ffi::c_void {
             0x5678 as *mut std::ffi::c_void
         }
@@ -1839,7 +1809,9 @@ mod tests {
             _visible: i32,
             _logging_on: i32,
             _instance_environment: *mut std::ffi::c_void,
-            _log_message: Option<unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8)>,
+            _log_message: Option<
+                unsafe extern "C" fn(*mut std::ffi::c_void, fmi3Status, *const i8, *const i8),
+            >,
             _clock_update: Option<extern "C" fn(*mut std::ffi::c_void)>,
             _lock_preemption: Option<extern "C" fn()>,
             _unlock_preemption: Option<extern "C" fn()>,
@@ -1864,9 +1836,7 @@ mod tests {
             fmi3Status::fmi3OK
         }
 
-        extern "C" fn mock_enter_event_mode(
-            _instance: *mut std::ffi::c_void,
-        ) -> fmi3Status {
+        extern "C" fn mock_enter_event_mode(_instance: *mut std::ffi::c_void) -> fmi3Status {
             fmi3Status::fmi3OK
         }
 
@@ -2067,7 +2037,7 @@ mod tests {
             // This is safe in tests because we never actually call through the library handle
             let library = mem::transmute::<usize, libloading::Library>(0xDEADBEEF);
 
-            let fmu_lib = FmuLibrary {
+            FmuLibrary {
                 library,
                 fmi3_get_version: mock_get_version,
                 fmi3_set_debug_logging: mock_set_debug_logging,
@@ -2109,9 +2079,7 @@ mod tests {
                 fmi3_set_binary: mock_set_binary,
                 fmi3_get_clock: mock_get_clock,
                 fmi3_set_clock: mock_set_clock,
-            };
-
-            fmu_lib
+            }
         }
     }
 
@@ -2138,8 +2106,14 @@ mod tests {
     #[test]
     fn test_status_conversion() {
         assert_eq!(status_to_proto(fmi3Status::fmi3OK), proto::Status::Ok);
-        assert_eq!(status_to_proto(fmi3Status::fmi3Warning), proto::Status::Warning);
-        assert_eq!(status_to_proto(fmi3Status::fmi3Discard), proto::Status::Discard);
+        assert_eq!(
+            status_to_proto(fmi3Status::fmi3Warning),
+            proto::Status::Warning
+        );
+        assert_eq!(
+            status_to_proto(fmi3Status::fmi3Discard),
+            proto::Status::Discard
+        );
         assert_eq!(status_to_proto(fmi3Status::fmi3Error), proto::Status::Error);
         assert_eq!(status_to_proto(fmi3Status::fmi3Fatal), proto::Status::Fatal);
     }
@@ -2150,9 +2124,7 @@ mod tests {
 
     #[test]
     fn test_fmi3_instance_message_serialization() {
-        let msg = proto::Fmi3InstanceMessage {
-            instance_index: 42,
-        };
+        let msg = proto::Fmi3InstanceMessage { instance_index: 42 };
 
         let bytes = serialize_message(&msg);
         let decoded: proto::Fmi3InstanceMessage = deserialize_message(&bytes);
@@ -2178,16 +2150,16 @@ mod tests {
             instance_index: 0,
             logging_on: true,
             n_categories: 2,
-            categories: vec!["logAll".to_string(), "logError".to_string()],
+            categories: ["logAll".to_string(), "logError".to_string()].to_vec(),
         };
 
         let bytes = serialize_message(&msg);
         let decoded: proto::Fmi3SetDebugLoggingMessage = deserialize_message(&bytes);
 
         assert_eq!(decoded.instance_index, 0);
-        assert_eq!(decoded.logging_on, true);
+        assert!(decoded.logging_on);
         assert_eq!(decoded.n_categories, 2);
-        assert_eq!(decoded.categories, vec!["logAll", "logError"]);
+        assert_eq!(decoded.categories, ["logAll", "logError"]);
     }
 
     #[test]
@@ -2200,7 +2172,7 @@ mod tests {
             logging_on: true,
             event_mode_used: false,
             early_return_allowed: false,
-            required_intermediate_variables: vec![1, 2, 3],
+            required_intermediate_variables: [1, 2, 3].to_vec(),
             n_required_intermediate_variables: 3,
         };
 
@@ -2208,10 +2180,13 @@ mod tests {
         let decoded: proto::Fmi3InstantiateCoSimulationMessage = deserialize_message(&bytes);
 
         assert_eq!(decoded.instance_name, "TestInstance");
-        assert_eq!(decoded.instantiation_token, "{12345678-1234-5678-1234-567812345678}");
-        assert_eq!(decoded.visible, false);
-        assert_eq!(decoded.logging_on, true);
-        assert_eq!(decoded.required_intermediate_variables, vec![1, 2, 3]);
+        assert_eq!(
+            decoded.instantiation_token,
+            "{12345678-1234-5678-1234-567812345678}"
+        );
+        assert!(!decoded.visible);
+        assert!(decoded.logging_on);
+        assert_eq!(decoded.required_intermediate_variables, [1, 2, 3]);
     }
 
     #[test]
@@ -2229,10 +2204,10 @@ mod tests {
         let decoded: proto::Fmi3EnterInitializationModeMessage = deserialize_message(&bytes);
 
         assert_eq!(decoded.instance_index, 0);
-        assert_eq!(decoded.tolerance_defined, true);
+        assert!(decoded.tolerance_defined);
         assert_eq!(decoded.tolerance, 1e-6);
         assert_eq!(decoded.start_time, 0.0);
-        assert_eq!(decoded.stop_time_defined, true);
+        assert!(decoded.stop_time_defined);
         assert_eq!(decoded.stop_time, 10.0);
     }
 
@@ -2255,14 +2230,14 @@ mod tests {
         assert_eq!(decoded.instance_index, 0);
         assert_eq!(decoded.current_communication_point, 0.0);
         assert_eq!(decoded.communication_step_size, 0.1);
-        assert_eq!(decoded.no_set_fmu_state_prior_to_current_point, true);
+        assert!(decoded.no_set_fmu_state_prior_to_current_point);
     }
 
     #[test]
     fn test_get_float64_message_serialization() {
         let msg = proto::Fmi3GetFloat64InputMessage {
             instance_index: 0,
-            value_references: vec![1, 2, 3],
+            value_references: [1, 2, 3].to_vec(),
             n_value_references: 3,
         };
 
@@ -2270,7 +2245,7 @@ mod tests {
         let decoded: proto::Fmi3GetFloat64InputMessage = deserialize_message(&bytes);
 
         assert_eq!(decoded.instance_index, 0);
-        assert_eq!(decoded.value_references, vec![1, 2, 3]);
+        assert_eq!(decoded.value_references, [1, 2, 3]);
         assert_eq!(decoded.n_value_references, 3);
     }
 
@@ -2278,9 +2253,9 @@ mod tests {
     fn test_set_float64_message_serialization() {
         let msg = proto::Fmi3SetFloat64InputMessage {
             instance_index: 0,
-            value_references: vec![1, 2],
+            value_references: [1, 2].to_vec(),
             n_value_references: 2,
-            values: vec![1.5, 2.5],
+            values: [1.5, 2.5].to_vec(),
             n_values: 2,
         };
 
@@ -2288,8 +2263,8 @@ mod tests {
         let decoded: proto::Fmi3SetFloat64InputMessage = deserialize_message(&bytes);
 
         assert_eq!(decoded.instance_index, 0);
-        assert_eq!(decoded.value_references, vec![1, 2]);
-        assert_eq!(decoded.values, vec![1.5, 2.5]);
+        assert_eq!(decoded.value_references, [1, 2]);
+        assert_eq!(decoded.values, [1.5, 2.5]);
     }
 
     // =============================================================================
@@ -2299,34 +2274,34 @@ mod tests {
     #[test]
     fn test_bool_to_fmi_conversion() {
         // Test boolean to FMI i32 conversion (used in handle_set_boolean)
-        let bool_values = vec![true, false, true];
+        let bool_values = [true, false, true];
         let fmi_values: Vec<i32> = bool_values.iter().map(|&b| if b { 1 } else { 0 }).collect();
 
-        assert_eq!(fmi_values, vec![1, 0, 1]);
+        assert_eq!(fmi_values, [1, 0, 1]);
     }
 
     #[test]
     fn test_fmi_to_bool_conversion() {
         // Test FMI i32 to boolean conversion (used in handle_get_boolean)
-        let fmi_values = vec![1, 0, 42, -1];
+        let fmi_values = [1, 0, 42, -1];
         let bool_values: Vec<bool> = fmi_values.iter().map(|&v| v != 0).collect();
 
-        assert_eq!(bool_values, vec![true, false, true, true]);
+        assert_eq!(bool_values, [true, false, true, true]);
     }
 
     #[test]
     fn test_value_reference_conversion() {
         // Test proto i32 to FMI u32 value reference conversion
-        let proto_refs: Vec<i32> = vec![0, 1, 100, 65535];
+        let proto_refs: Vec<i32> = [0, 1, 100, 65535].to_vec();
         let fmi_refs: Vec<u32> = proto_refs.iter().map(|&vr| vr as u32).collect();
 
-        assert_eq!(fmi_refs, vec![0u32, 1u32, 100u32, 65535u32]);
+        assert_eq!(fmi_refs, [0u32, 1u32, 100u32, 65535u32]);
     }
 
     #[test]
     fn test_string_to_cstring_conversion() {
         // Test Rust String to CString conversion (used in multiple handlers)
-        let rust_strings = vec!["test1".to_string(), "test2".to_string()];
+        let rust_strings = ["test1".to_string(), "test2".to_string()];
         let c_strings: Vec<CString> = rust_strings
             .iter()
             .map(|s| CString::new(s.as_str()).unwrap())
@@ -2426,10 +2401,7 @@ mod tests {
 
         assert_eq!(c_categories.len(), 0);
 
-        let category_ptrs: Vec<*const i8> = c_categories
-            .iter()
-            .map(|cs| cs.as_ptr())
-            .collect();
+        let category_ptrs: Vec<*const i8> = c_categories.iter().map(|cs| cs.as_ptr()).collect();
 
         assert_eq!(category_ptrs.len(), 0);
     }
@@ -2450,11 +2422,7 @@ mod tests {
     #[test]
     fn test_binary_size_array_creation() {
         // Test the pattern used in handle_set_binary for creating size arrays
-        let binary_values = vec![
-            vec![1u8, 2, 3],
-            vec![4, 5],
-            vec![6, 7, 8, 9],
-        ];
+        let binary_values = [vec![1u8, 2, 3], vec![4, 5], vec![6, 7, 8, 9]];
 
         let mut value_sizes: Vec<usize> = Vec::new();
         let mut binary_buffer: Vec<u8> = Vec::new();
@@ -2464,15 +2432,15 @@ mod tests {
             binary_buffer.extend_from_slice(binary_value);
         }
 
-        assert_eq!(value_sizes, vec![3, 2, 4]);
-        assert_eq!(binary_buffer, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(value_sizes, [3, 2, 4]);
+        assert_eq!(binary_buffer, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 
     #[test]
     fn test_binary_pointer_array_creation() {
         // Test pointer array creation for binary data
-        let binary_buffer = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9];
-        let value_sizes = vec![3, 2, 4];
+        let binary_buffer = [1u8, 2, 3, 4, 5, 6, 7, 8, 9];
+        let value_sizes = [3, 2, 4];
 
         let mut binary_ptrs: Vec<*const u8> = Vec::new();
         let mut offset = 0;
@@ -2498,21 +2466,14 @@ mod tests {
     #[test]
     fn test_string_array_conversion() {
         // Test the pattern used in handle_set_string
-        let input_strings = vec![
-            "hello".to_string(),
-            "world".to_string(),
-            "test".to_string(),
-        ];
+        let input_strings = ["hello".to_string(), "world".to_string(), "test".to_string()];
 
         let c_strings: Vec<CString> = input_strings
             .iter()
             .map(|s| CString::new(s.as_str()).unwrap_or_default())
             .collect();
 
-        let c_string_ptrs: Vec<*const i8> = c_strings
-            .iter()
-            .map(|cs| cs.as_ptr())
-            .collect();
+        let c_string_ptrs: Vec<*const i8> = c_strings.iter().map(|cs| cs.as_ptr()).collect();
 
         assert_eq!(c_string_ptrs.len(), 3);
 
@@ -2556,19 +2517,19 @@ mod tests {
         // Test the type conversion pattern used in impl_get_value_handler macro
 
         // Float types - no conversion needed
-        let float_values: Vec<f64> = vec![1.5, 2.5, 3.5];
-        let proto_values: Vec<f64> = float_values.iter().map(|&v| v as f64).collect();
-        assert_eq!(proto_values, vec![1.5, 2.5, 3.5]);
+        let float_values: Vec<f64> = [1.5, 2.5, 3.5].to_vec();
+        let proto_values: Vec<f64> = float_values.to_vec();
+        assert_eq!(proto_values, [1.5, 2.5, 3.5]);
 
         // Integer types - conversion to i32 for proto
-        let int8_values: Vec<i8> = vec![1, 2, 3];
+        let int8_values: Vec<i8> = [1, 2, 3].to_vec();
         let proto_values: Vec<i32> = int8_values.iter().map(|&v| v as i32).collect();
-        assert_eq!(proto_values, vec![1, 2, 3]);
+        assert_eq!(proto_values, [1, 2, 3]);
 
         // Unsigned types - conversion to u32 for proto
-        let uint8_values: Vec<u8> = vec![10, 20, 30];
+        let uint8_values: Vec<u8> = [10, 20, 30].to_vec();
         let proto_values: Vec<u32> = uint8_values.iter().map(|&v| v as u32).collect();
-        assert_eq!(proto_values, vec![10, 20, 30]);
+        assert_eq!(proto_values, [10, 20, 30]);
     }
 
     #[test]
@@ -2576,19 +2537,19 @@ mod tests {
         // Test the type conversion pattern used in impl_set_value_handler macro
 
         // Proto to FMI float conversion
-        let proto_values: Vec<f64> = vec![1.5, 2.5];
-        let fmi_values: Vec<f64> = proto_values.iter().map(|&v| v as f64).collect();
-        assert_eq!(fmi_values, vec![1.5, 2.5]);
+        let proto_values: Vec<f64> = [1.5, 2.5].to_vec();
+        let fmi_values: Vec<f64> = proto_values.to_vec();
+        assert_eq!(fmi_values, [1.5, 2.5]);
 
         // Proto to FMI integer conversion
-        let proto_values: Vec<i32> = vec![10, 20];
+        let proto_values: Vec<i32> = [10, 20].to_vec();
         let fmi_values: Vec<i16> = proto_values.iter().map(|&v| v as i16).collect();
-        assert_eq!(fmi_values, vec![10i16, 20i16]);
+        assert_eq!(fmi_values, [10i16, 20i16]);
 
         // Proto to FMI unsigned conversion
-        let proto_values: Vec<u32> = vec![100, 200];
+        let proto_values: Vec<u32> = [100, 200].to_vec();
         let fmi_values: Vec<u8> = proto_values.iter().map(|&v| v as u8).collect();
-        assert_eq!(fmi_values, vec![100u8, 200u8]);
+        assert_eq!(fmi_values, [100u8, 200u8]);
     }
 
     // =============================================================================
@@ -2607,7 +2568,10 @@ mod tests {
             std::ptr::null(),
             std::ptr::null(),
             std::ptr::null(),
-            0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
             std::ptr::null(),
             0,
             std::ptr::null_mut(),
@@ -2627,12 +2591,7 @@ mod tests {
         let mock_fmu = create_mock_fmu();
         let instance = 0x1234 as *mut std::ffi::c_void;
 
-        let status = (mock_fmu.fmi3_set_debug_logging)(
-            instance,
-            1,
-            0,
-            std::ptr::null(),
-        );
+        let status = (mock_fmu.fmi3_set_debug_logging)(instance, 1, 0, std::ptr::null());
 
         assert_eq!(status, fmi3Status::fmi3OK);
     }
@@ -2645,19 +2604,14 @@ mod tests {
         let mock_fmu = create_mock_fmu();
         let instance = 0x1234 as *mut std::ffi::c_void;
 
-        let value_refs = vec![0u32, 1u32, 2u32];
-        let mut values = vec![0.0f64; 3];
+        let value_refs = [0u32, 1u32, 2u32];
+        let mut values = [0.0f64; 3];
 
-        let status = (mock_fmu.fmi3_get_float64)(
-            instance,
-            value_refs.as_ptr(),
-            3,
-            values.as_mut_ptr(),
-            3,
-        );
+        let status =
+            (mock_fmu.fmi3_get_float64)(instance, value_refs.as_ptr(), 3, values.as_mut_ptr(), 3);
 
         assert_eq!(status, fmi3Status::fmi3OK);
-        assert_eq!(values, vec![0.0, 1.5, 3.0]);
+        assert_eq!(values, [0.0, 1.5, 3.0]);
     }
 
     // These tests are ignored because they require a valid FMU library handle which
@@ -2668,20 +2622,15 @@ mod tests {
         let mock_fmu = create_mock_fmu();
         let instance = 0x1234 as *mut std::ffi::c_void;
 
-        let value_refs = vec![0u32, 1u32, 2u32, 3u32];
-        let mut values = vec![0i32; 4];
+        let value_refs = [0u32, 1u32, 2u32, 3u32];
+        let mut values = [0i32; 4];
 
-        let status = (mock_fmu.fmi3_get_boolean)(
-            instance,
-            value_refs.as_ptr(),
-            4,
-            values.as_mut_ptr(),
-            4,
-        );
+        let status =
+            (mock_fmu.fmi3_get_boolean)(instance, value_refs.as_ptr(), 4, values.as_mut_ptr(), 4);
 
         assert_eq!(status, fmi3Status::fmi3OK);
         // Even indices should be 1, odd indices should be 0
-        assert_eq!(values, vec![1, 0, 1, 0]);
+        assert_eq!(values, [1, 0, 1, 0]);
     }
 
     // These tests are ignored because they require a valid FMU library handle which
@@ -2744,7 +2693,7 @@ mod tests {
     #[test]
     fn test_single_element_arrays() {
         // Test arrays with single elements
-        let value_refs = vec![42i32];
+        let value_refs = [42i32];
         let fmi_refs: Vec<u32> = value_refs.iter().map(|&vr| vr as u32).collect();
 
         assert_eq!(fmi_refs.len(), 1);

@@ -100,6 +100,7 @@ impl InstanceManager {
     /// ```ignore
     /// let manager = InstanceManager::new();
     /// ```
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Self {
         InstanceManager {
             state: Arc::new(Mutex::new(InstanceManagerState {

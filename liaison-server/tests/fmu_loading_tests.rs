@@ -60,10 +60,8 @@ impl FmuValidator {
 
     /// Extract the FMU to the temporary directory
     fn extract(&self) -> Result<std::path::PathBuf> {
-        let file = fs::File::open(&self.fmu_path)
-            .context("Failed to open FMU file")?;
-        let mut archive = ZipArchive::new(file)
-            .context("Failed to read FMU as ZIP archive")?;
+        let file = fs::File::open(&self.fmu_path).context("Failed to open FMU file")?;
+        let mut archive = ZipArchive::new(file).context("Failed to read FMU as ZIP archive")?;
 
         archive
             .extract(self.temp_dir.path())
@@ -101,10 +99,7 @@ fn test_fmu_exists() -> Result<()> {
     // Verify it's a valid ZIP file
     let file = fs::File::open(&fmu_path)?;
     let archive = ZipArchive::new(file);
-    assert!(
-        archive.is_ok(),
-        "FMU file is not a valid ZIP archive"
-    );
+    assert!(archive.is_ok(), "FMU file is not a valid ZIP archive");
 
     println!("FMU file exists and is a valid ZIP archive");
     Ok(())
@@ -118,10 +113,7 @@ fn test_fmu_directory_structure() -> Result<()> {
 
     // Check required files exist
     let model_desc = validator.model_description_path();
-    assert!(
-        model_desc.exists(),
-        "modelDescription.xml not found in FMU"
-    );
+    assert!(model_desc.exists(), "modelDescription.xml not found in FMU");
 
     let config_json = validator.config_json_path();
     assert!(
@@ -176,7 +168,11 @@ fn test_model_description_is_valid_xml() -> Result<()> {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                anyhow::bail!("Error parsing XML at position {}: {:?}", reader.buffer_position(), e);
+                anyhow::bail!(
+                    "Error parsing XML at position {}: {:?}",
+                    reader.buffer_position(),
+                    e
+                );
             }
             _ => {}
         }
@@ -308,7 +304,10 @@ fn test_model_description_required_elements() -> Result<()> {
     println!("modelDescription.xml contains all required FMI 3.0 elements:");
     println!("  - fmiVersion: {}", attributes.get("fmiVersion").unwrap());
     println!("  - modelName: {}", attributes.get("modelName").unwrap());
-    println!("  - instantiationToken: {}", attributes.get("instantiationToken").unwrap());
+    println!(
+        "  - instantiationToken: {}",
+        attributes.get("instantiationToken").unwrap()
+    );
     println!("  - CoSimulation: OK");
     println!("  - ModelVariables: OK");
 
@@ -321,11 +320,12 @@ fn test_binary_is_valid_elf() -> Result<()> {
     let validator = FmuValidator::new(fmu_path)?;
     validator.extract()?;
 
-    let binary_path = validator.binaries_path().join("x86_64-linux/BouncingBall.so");
+    let binary_path = validator
+        .binaries_path()
+        .join("x86_64-linux/BouncingBall.so");
 
     // Read first 4 bytes to check ELF magic number
-    let mut file = fs::File::open(&binary_path)
-        .context("Failed to open binary file")?;
+    let mut file = fs::File::open(&binary_path).context("Failed to open binary file")?;
 
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic)
@@ -362,12 +362,12 @@ fn test_config_json_is_valid() -> Result<()> {
     let validator = FmuValidator::new(fmu_path)?;
     validator.extract()?;
 
-    let config_content = fs::read_to_string(validator.config_json_path())
-        .context("Failed to read config.json")?;
+    let config_content =
+        fs::read_to_string(validator.config_json_path()).context("Failed to read config.json")?;
 
     // Parse JSON
-    let config: serde_json::Value = serde_json::from_str(&config_content)
-        .context("Failed to parse config.json")?;
+    let config: serde_json::Value =
+        serde_json::from_str(&config_content).context("Failed to parse config.json")?;
 
     // Check required fields
     assert!(
@@ -419,7 +419,10 @@ fn test_fmu_complete_validation() -> Result<()> {
     total_checks += 1;
     if validator.model_description_path().exists()
         && validator.config_json_path().exists()
-        && validator.binaries_path().join("x86_64-linux/BouncingBall.so").exists()
+        && validator
+            .binaries_path()
+            .join("x86_64-linux/BouncingBall.so")
+            .exists()
     {
         println!("[PASS] FMU directory structure is correct");
         checks_passed += 1;
@@ -474,7 +477,9 @@ fn test_fmu_complete_validation() -> Result<()> {
 
     // Check 6: ELF binary
     total_checks += 1;
-    let binary_path = validator.binaries_path().join("x86_64-linux/BouncingBall.so");
+    let binary_path = validator
+        .binaries_path()
+        .join("x86_64-linux/BouncingBall.so");
     let mut file = fs::File::open(&binary_path)?;
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic)?;
@@ -504,7 +509,14 @@ fn test_fmu_complete_validation() -> Result<()> {
     // Summary
     println!("\n=== Validation Summary ===");
     println!("Checks passed: {}/{}", checks_passed, total_checks);
-    println!("Status: {}", if checks_passed == total_checks { "PASS" } else { "FAIL" });
+    println!(
+        "Status: {}",
+        if checks_passed == total_checks {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
 
     assert_eq!(
         checks_passed, total_checks,
@@ -561,7 +573,10 @@ fn test_fmu_model_variables_present() -> Result<()> {
         "No model variables found in modelDescription.xml"
     );
 
-    println!("Found {} model variables in modelDescription.xml", variable_count);
+    println!(
+        "Found {} model variables in modelDescription.xml",
+        variable_count
+    );
     Ok(())
 }
 
@@ -582,7 +597,9 @@ fn test_fmu_cosimulation_attributes() -> Result<()> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) if e.name().as_ref() == b"CoSimulation" => {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.name().as_ref() == b"CoSimulation" =>
+            {
                 for attr in e.attributes() {
                     let attr = attr?;
                     let key = String::from_utf8(attr.key.as_ref().to_vec())?;

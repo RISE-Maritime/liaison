@@ -183,10 +183,7 @@ fn test_construct_library_path_windows() {
     #[cfg(all(target_os = "windows", target_pointer_width = "64"))]
     {
         let path = construct_library_path("C:\\temp\\fmu", "MyModel");
-        assert_eq!(
-            path,
-            "C:\\temp\\fmu/binaries/x86_64-windows/MyModel.dll"
-        );
+        assert_eq!(path, "C:\\temp\\fmu/binaries/x86_64-windows/MyModel.dll");
     }
 
     #[cfg(all(target_os = "windows", target_pointer_width = "32"))]
@@ -435,7 +432,11 @@ fn test_make_fmu_with_zenoh_config() {
             "endpoints": ["tcp/localhost:7447"]
         }
     });
-    fs::write(&zenoh_config_path, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+    fs::write(
+        &zenoh_config_path,
+        serde_json::to_string_pretty(&config).unwrap(),
+    )
+    .unwrap();
 
     // Attempt to create Liaison FMU
     let result = make_fmu(
