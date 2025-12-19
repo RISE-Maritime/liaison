@@ -1,5 +1,7 @@
 # Use the official Ubuntu 22.04 LTS image
-FROM ubuntu:22.04
+FROM node:20
+
+ARG CLAUDE_CODE_VERSION=latest
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -15,6 +17,23 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     wget \
+    less \
+    git \
+    procps \
+    sudo \
+    fzf \
+    zsh \
+    man-db \
+    unzip \
+    gnupg2 \
+    gh \
+    iptables \
+    ipset \
+    iproute2 \
+    dnsutils \
+    aggregate \
+    jq \
+    nano \
     zlib1g-dev \
     libbz2-dev \
     liblzma-dev \
@@ -24,9 +43,16 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
-    sudo
-RUN rm -rf /var/lib/apt/lists/*
+    sudo \
+    && apt-get clean && rm -rf /var/lib/apt/list
 
+
+# Ensure default node user has access to /usr/local/share
+RUN mkdir -p /usr/local/share/npm-global && \
+  chown -R node:node /usr/local/share
+
+# Set `DEVCONTAINER` environment variable to help with orientation
+ENV DEVCONTAINER=true
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain 1.75.0 -y \
@@ -38,23 +64,27 @@ ENV PATH="/root/.cargo/bin:$PATH"
 # Verify Rust and Cargo installation
 RUN rustup --version && cargo --version
 
-WORKDIR /workspaces
+# Create workspace and config directories and set permissions
+RUN mkdir -p /workspace /home/node/.claude && \
+  chown -R node:node /workspace /home/node/.claude
+
+WORKDIR /workspace
 
 # Build and install Zenoh-c
-RUN git clone --depth 1 --branch ${ZENOH_VERSION} https://github.com/eclipse-zenoh/zenoh-c.git /workspaces/zenoh-c
-WORKDIR /workspaces/zenoh-c/build
+RUN git clone --depth 1 --branch ${ZENOH_VERSION} https://github.com/eclipse-zenoh/zenoh-c.git /workspace/zenoh-c
+WORKDIR /workspace/zenoh-c/build
 RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=FALSE && \
     cmake --build . --target install
 
 # Build and install Zenoh-cpp
-RUN git clone --depth 1 --branch ${ZENOH_VERSION} https://github.com/eclipse-zenoh/zenoh-cpp.git /workspaces/zenoh-cpp
-WORKDIR /workspaces/zenoh-cpp/build
+RUN git clone --depth 1 --branch ${ZENOH_VERSION} https://github.com/eclipse-zenoh/zenoh-cpp.git /workspace/zenoh-cpp
+WORKDIR /workspace/zenoh-cpp/build
 RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=FALSE && \
     cmake --build . --target install 
 
 # Build and install Spdlog
-RUN git clone --depth 1 --branch ${SPDLOG_VERSION} https://github.com/gabime/spdlog.git /workspaces/spdlog
-WORKDIR /workspaces/spdlog/build
+RUN git clone --depth 1 --branch ${SPDLOG_VERSION} https://github.com/gabime/spdlog.git /workspace/spdlog
+WORKDIR /workspace/spdlog/build
 RUN cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DSPDLOG_BUILD_SHARED=FALSE && \
     cmake --build . --target install
     
@@ -85,17 +115,38 @@ RUN wget https://libzip.org/download/libzip-${LIBZIP_VERSION}.tar.gz && \
     && make install
 RUN rm -rf /libzip-${LIBZIP_VERSION} /libzip-${LIBZIP_VERSION}.tar.gz
 
-# Python and FMPy
-RUN python3 -m pip install fmpy[complete]==0.3.20
+# Set up non-root user
+USER node
 
-# Create a non-root user 
-ENV USERNAME=developer
-RUN useradd -m -s /bin/bash $USERNAME
-RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+# Install global packages
+ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
+ENV PATH=$PATH:/usr/local/share/npm-global/bin
 
-USER ${USERNAME}
+# Set the default shell to zsh rather than sh
+ENV SHELL=/bin/zsh
 
-# Copy the workspace files to the container
-COPY . /workspaces
+# Set the default editor and visual
+ENV EDITOR=nano
+ENV VISUAL=nano
 
-CMD ["/bin/bash"]
+# Install Claude
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+
+# Install uv and Python tools
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    /home/node/.local/bin/uv tool install black && \
+    /home/node/.local/bin/uv tool install specify-cli --from git+https://github.com/github/spec-kit.git && \
+    /home/node/.local/bin/uv venv /home/node/.venv && \
+    /home/node/.local/bin/uv pip install --python /home/node/.venv/bin/python fmpy
+
+# Add uv, Python tools, and venv to PATH
+ENV PATH="/home/node/.venv/bin:/home/node/.cargo/bin:/home/node/.local/bin:$PATH"
+
+# Copy and set up firewall script
+COPY init-firewall.sh /usr/local/bin/
+USER root
+RUN chmod +x /usr/local/bin/init-firewall.sh && \
+  echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
+  chmod 0440 /etc/sudoers.d/node-firewall
+USER node
+
