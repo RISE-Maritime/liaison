@@ -2,3 +2,4 @@ build
 *.pem
 tests/config.json
 examples
+.vscode
