@@ -636,6 +636,23 @@ int dummyFmu_writeCallLogToFile(const char* filepath) {
             fprintf(f, "],\n");
         }
 
+        /* Binary values */
+        if (rec->type == CALL_FMI3_SET_BINARY || rec->type == CALL_FMI3_GET_BINARY) {
+            fprintf(f, "      \"total_binary_size\": %zu,\n", rec->total_binary_size);
+            fprintf(f, "      \"binary_sizes\": [");
+            for (size_t j = 0; j < rec->n_values && j < MAX_VALUE_REFERENCES; j++) {
+                fprintf(f, "%zu%s", rec->binary_sizes[j],
+                        j < rec->n_values - 1 ? ", " : "");
+            }
+            fprintf(f, "],\n");
+            /* Write binary data as hex string */
+            fprintf(f, "      \"binary_data_hex\": \"");
+            for (size_t j = 0; j < rec->total_binary_size; j++) {
+                fprintf(f, "%02x", rec->binary_data[j]);
+            }
+            fprintf(f, "\",\n");
+        }
+
         /* Initialization mode parameters */
         if (rec->type == CALL_FMI3_ENTER_INITIALIZATION_MODE) {
             fprintf(f, "      \"tolerance_defined\": %s,\n", rec->tolerance_defined ? "true" : "false");

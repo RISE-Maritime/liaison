@@ -643,35 +643,48 @@ namespace callbacks {
         printQuery(query);
 
         proto::fmi3SetBinaryInputMessage input;
-        
+
         PARSE_QUERY(query, input)
 
         size_t nValueReferences = input.n_value_references();
+        size_t nValues = input.n_values();
         std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[nValueReferences]);
-        std::unique_ptr<size_t[]> value_sizes(new size_t[nValueReferences]);
-        std::vector<uint8_t> values;
+        std::unique_ptr<size_t[]> value_sizes(new size_t[nValues]);
 
-        size_t offset = 0;
+        // Storage for binary data
+        std::vector<uint8_t> binaryStorage;
+        // Array of pointers to each binary blob
+        std::unique_ptr<fmi3Binary[]> values(new fmi3Binary[nValues]);
+
         for (size_t i = 0; i < nValueReferences; ++i) {
             value_references[i] = input.value_references()[i];
+        }
+
+        // First pass: collect all binary data
+        for (size_t i = 0; i < nValues; ++i) {
             const std::string& binaryValue = input.values(i);
             value_sizes[i] = binaryValue.size();
-            values.insert(values.end(), binaryValue.begin(), binaryValue.end());
+            binaryStorage.insert(binaryStorage.end(), binaryValue.begin(), binaryValue.end());
+        }
+
+        // Second pass: set pointers into the storage
+        size_t offset = 0;
+        for (size_t i = 0; i < nValues; ++i) {
+            values[i] = binaryStorage.data() + offset;
+            offset += value_sizes[i];
         }
 
         fmi3Status status = fmu::fmi3SetBinary(
             getInstance(input.instance_index()),
             value_references.get(),
-            input.n_value_references(),
+            nValueReferences,
             value_sizes.get(),
-            reinterpret_cast<const fmi3Binary*>(values.data()),
-            values.size()        
+            values.get(),
+            nValues
         );
-        
+
         proto::fmi3StatusMessage output = makeFmi3StatusMessage(status);
         SERIALIZE_REPLY(query, output)
-
-     
     }
 
     void fmi3GetBinary(const zenoh::Query& query) {
@@ -681,10 +694,11 @@ namespace callbacks {
         PARSE_QUERY(query, input)
 
         size_t nValueReferences = input.n_value_references();
-        std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[input.n_value_references()]);
+        std::unique_ptr<fmi3ValueReference[]> value_references(new fmi3ValueReference[nValueReferences]);
         std::unique_ptr<size_t[]> value_sizes(new size_t[nValueReferences]);
-        std::unique_ptr<fmi3Binary[]> values(new fmi3Binary[nValueReferences * MAX_BINARY_SIZE]); // Assuming MAX_BINARY_SIZE is defined
-        size_t n_value = 0;
+        // Array of pointers - the FMU will set these to point to its internal storage
+        std::unique_ptr<fmi3Binary[]> values(new fmi3Binary[nValueReferences]);
+        size_t nValues = nValueReferences;
 
         for (size_t i = 0; i < nValueReferences; ++i) {
             value_references[i] = input.value_references()[i];
@@ -696,20 +710,19 @@ namespace callbacks {
             nValueReferences,
             value_sizes.get(),
             values.get(),
-            n_value
+            nValues
         );
 
         proto::fmi3GetBinaryOutputMessage output;
-        size_t offset = 0;
+        // Each values[i] is a pointer to binary data of size value_sizes[i]
         for (size_t i = 0; i < nValueReferences; ++i) {
-            std::string binaryValue(reinterpret_cast<const char*>(values.get() + offset), value_sizes[i]);
+            std::string binaryValue(reinterpret_cast<const char*>(values[i]), value_sizes[i]);
             output.add_values(binaryValue);
-            offset += value_sizes[i];
         }
         output.set_status(transformToProtoStatus(status));
+        output.set_n_values(nValueReferences);
 
         SERIALIZE_REPLY(query, output)
-
     }
 
     
@@ -816,6 +829,8 @@ int startServer(const std::string& fmuPath, const std::string& responderId, cons
     BIND_FMU_LIBRARY_FUNCTION(fmi3GetString)
     BIND_FMU_LIBRARY_FUNCTION(fmi3SetClock)
     BIND_FMU_LIBRARY_FUNCTION(fmi3GetClock)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3SetBinary)
+    BIND_FMU_LIBRARY_FUNCTION(fmi3GetBinary)
     BIND_FMU_LIBRARY_FUNCTION(fmi3Reset)
     BIND_FMU_LIBRARY_FUNCTION(fmi3Terminate)
 

@@ -613,11 +613,9 @@ fmi3Status fmi3SetBinary(
     }
     input.set_n_value_references(nValueReferences);
 
-    size_t offset = 0;
     for (size_t i = 0; i < nValues; ++i) {
-        std::string binaryValue(reinterpret_cast<const char*>(values + offset), valueSizes[i]);
+        std::string binaryValue(reinterpret_cast<const char*>(values[i]), valueSizes[i]);
         input.add_values(binaryValue);
-        offset += valueSizes[i];
     }
     input.set_n_values(nValues);
 
@@ -646,15 +644,31 @@ fmi3Status fmi3GetBinary(
     
     QUERY("fmi3GetBinary", input, output)
 
-    size_t offset = 0;
+    // Static storage for binary data returned to caller
+    // Note: This limits concurrent calls and total binary size
+    static std::vector<uint8_t> binaryStorage;
+    static std::vector<const uint8_t*> binaryPointers;
+
+    binaryStorage.clear();
+    binaryPointers.clear();
+
+    // First pass: collect all binary data and calculate offsets
     for (size_t i = 0; i < output.n_values(); ++i) {
         const std::string& binaryValue = output.values(i);
         size_t binarySize = binaryValue.size();
         valueSizes[i] = binarySize;
-        std::memcpy(values + offset, binaryValue.data(), binarySize);
-        offset += binarySize;
+        size_t offset = binaryStorage.size();
+        binaryStorage.insert(binaryStorage.end(), binaryValue.begin(), binaryValue.end());
+        binaryPointers.push_back(nullptr); // placeholder
     }
-   
+
+    // Second pass: set pointers (after all data is in storage, so no reallocation)
+    size_t offset = 0;
+    for (size_t i = 0; i < output.n_values(); ++i) {
+        values[i] = binaryStorage.data() + offset;
+        offset += valueSizes[i];
+    }
+
     return transformToFmi3Status(output.status());
 }
 

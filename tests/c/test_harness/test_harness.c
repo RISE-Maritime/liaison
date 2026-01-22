@@ -697,6 +697,48 @@ static int parse_call_log_json(const char* json, CallRecord* records, size_t* co
             }
         }
 
+        /* Parse binary data */
+        const char* total_bin_start = strstr(p, "\"total_binary_size\":");
+        if (total_bin_start && total_bin_start < obj_end) {
+            total_bin_start += strlen("\"total_binary_size\":");
+            while (*total_bin_start == ' ') total_bin_start++;
+            rec->total_binary_size = (size_t)atol(total_bin_start);
+        }
+
+        const char* bin_sizes_start = strstr(p, "\"binary_sizes\":");
+        if (bin_sizes_start && bin_sizes_start < obj_end) {
+            bin_sizes_start = strchr(bin_sizes_start, '[');
+            if (bin_sizes_start && bin_sizes_start < obj_end) {
+                bin_sizes_start++;
+                for (size_t j = 0; j < rec->n_values && j < MAX_VALUE_REFERENCES; j++) {
+                    while (*bin_sizes_start == ' ' || *bin_sizes_start == ',') bin_sizes_start++;
+                    if (*bin_sizes_start == ']') break;
+                    rec->binary_sizes[j] = (size_t)atol(bin_sizes_start);
+                    while ((*bin_sizes_start >= '0' && *bin_sizes_start <= '9')) {
+                        bin_sizes_start++;
+                    }
+                }
+            }
+        }
+
+        const char* bin_hex_start = strstr(p, "\"binary_data_hex\":");
+        if (bin_hex_start && bin_hex_start < obj_end) {
+            /* Skip past the key and colon to find the value */
+            bin_hex_start += strlen("\"binary_data_hex\":");
+            while (*bin_hex_start == ' ') bin_hex_start++;  /* Skip whitespace */
+            if (*bin_hex_start == '"') {
+                bin_hex_start++;  /* Skip opening quote of value */
+                size_t hex_idx = 0;
+                size_t bin_idx = 0;
+                while (bin_hex_start[hex_idx] && bin_hex_start[hex_idx] != '"' && bin_idx < MAX_BINARY_SIZE) {
+                    char hex_byte[3] = {bin_hex_start[hex_idx], bin_hex_start[hex_idx + 1], '\0'};
+                    rec->binary_data[bin_idx] = (fmi3Byte)strtol(hex_byte, NULL, 16);
+                    hex_idx += 2;
+                    bin_idx++;
+                }
+            }
+        }
+
         /* Parse clock_values array */
         const char* clock_start = strstr(p, "\"clock_values\":");
         if (clock_start && clock_start < obj_end) {
