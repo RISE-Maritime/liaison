@@ -3,3 +3,8 @@ build
 tests/config.json
 examples
 .vscode
+.venv
+*.env
+__pycache__/
+*.pyc
+.DS_Store
