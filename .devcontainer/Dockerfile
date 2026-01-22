@@ -64,9 +64,6 @@ ENV PATH="/root/.cargo/bin:$PATH"
 # Verify Rust and Cargo installation
 RUN rustup --version && cargo --version
 
-# Create workspace and config directories and set permissions
-RUN mkdir -p /workspace /home/node/.claude && \
-  chown -R node:node /workspace /home/node/.claude
 
 WORKDIR /workspace
 
@@ -130,7 +127,7 @@ ENV EDITOR=nano
 ENV VISUAL=nano
 
 # Install Claude
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Install uv and Python tools
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
