@@ -126,3 +126,11 @@ target_link_libraries(liaisonfmu PRIVATE
     protobuf::libprotobuf
     nlohmann_json::nlohmann_json
 )
+
+# =============================================================================
+# Unit Tests
+# =============================================================================
+option(BUILD_TESTS "Build unit tests" ON)
+if(BUILD_TESTS)
+    add_subdirectory(tests/c)
+endif()
